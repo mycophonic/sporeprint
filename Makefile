@@ -65,10 +65,10 @@ lint-go:
 lint-go-all:
 	$(call title, $@)
 	@cd $(MAKEFILE_DIR) \
-		&& GOOS=darwin make lint-go \
-		&& GOOS=linux make lint-go \
-		&& GOOS=freebsd make lint-go \
-		&& GOOS=windows make lint-go
+		&& GOOS=darwin $(MAKE) lint-go \
+		&& GOOS=linux $(MAKE) lint-go \
+		&& GOOS=freebsd $(MAKE) lint-go \
+		&& GOOS=windows $(MAKE) lint-go
 	$(call footer, $@)
 
 lint-yaml:
@@ -111,9 +111,6 @@ lint-licenses:
 	$(call title, $@: $(GOOS))
 	@cd $(MAKEFILE_DIR) \
 		&& go-licenses check --include_tests --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,MPL-2.0 \
-		  --ignore gotest.tools \
-		  --ignore github.com/in-toto \
-		  --ignore github.com/cyberphone/json-canonicalization \
 		  ./...
 	$(call footer, $@)
 
@@ -214,6 +211,9 @@ test-unit-race:
 	fix-go fix-go-all fix-mod \
 	test-unit test-unit-race test-unit-bench \
 	build install clean
+
+# Default target
+.DEFAULT_GOAL := help
 
 # Binary name
 BINARY_PATH := ./bin/$(NAME)

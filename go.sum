@@ -1,8 +1,8 @@
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/farcloser/primordium v0.0.0-20260124072308-e605742a4e78 h1:ZA2+noBx9o0dQBo0xSr9pHadNG0+UByLDEvK420BTwk=
-github.com/farcloser/primordium v0.0.0-20260124072308-e605742a4e78/go.mod h1:4lUpX8RbexpWxI8cE3eCBA9VCjax9OPx5gEVKpe9eX0=
+github.com/farcloser/primordium v0.0.0-20260124095306-e29c5b2a0db1 h1:0JhBUQFBOEJnKipw5ZTjgUoARswIwgVMSbc/NRg6WbI=
+github.com/farcloser/primordium v0.0.0-20260124095306-e29c5b2a0db1/go.mod h1:zb+V8BAJmrrOQEGa8QlK+/0GdbGidmzje85ZO4UtPKg=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
