@@ -22,6 +22,7 @@ process_sporeprint() {
 
 export -f process_fpcalc process_sporeprint
 
+# shellcheck disable=SC2016
 if [ "$bin" == "fpcalc" ]; then
   find "$folder" -type f \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.mp4" \) -print0 |
     xargs -0 -P "$ncpu" -n 1 bash -c 'process_fpcalc "$1"' _
