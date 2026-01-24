@@ -63,19 +63,12 @@ Presumably Chromaprint authors figured this was the sweet spot for accuracy vs. 
 ```bash
 # Dependencies (Debian/Ubuntu)
 sudo apt install cmake build-essential
-
-# Build
-./build.sh
 ```
-
-This builds Chromaprint with **KissFFT only** - no FFmpeg, no FFTW3.
 
 Then
 ```
 make build
 ```
-
-Binary will be in `bin/sporeprint`.
 
 ## Develop
 
@@ -93,10 +86,7 @@ See `cmd/sporeprint/main.go` for a working example.
 
 Or just shell out to the provided binary.
 
-## Compatibility & performance
+## More
 
-See [COMPAT](docs/COMPAT.md)
-
-## The landscape of audio fingerprinting and why Chromaprint
-
-See [LANDSCAPE](docs/LANDSCAPE.md).
+* [COMPAT](docs/COMPAT.md)
+* [LANDSCAPE](docs/LANDSCAPE.md).

@@ -120,10 +120,10 @@ lint-licenses:
 lint-licenses-all:
 	$(call title, $@)
 	@cd $(MAKEFILE_DIR) \
-		&& GOOS=darwin make lint-licenses \
-		&& GOOS=linux make lint-licenses \
-		&& GOOS=freebsd make lint-licenses \
-		&& GOOS=windows make lint-licenses
+		&& GOOS=darwin $(MAKE) lint-licenses \
+		&& GOOS=linux $(MAKE) lint-licenses \
+		&& GOOS=freebsd $(MAKE) lint-licenses \
+		&& GOOS=windows $(MAKE) lint-licenses
 	$(call footer, $@)
 
 ##########################
@@ -138,10 +138,10 @@ fix-go:
 fix-go-all:
 	$(call title, $@)
 	@cd $(MAKEFILE_DIR) \
-		&& GOOS=darwin make fix-go \
-		&& GOOS=linux make fix-go \
-		&& GOOS=freebsd make fix-go \
-		&& GOOS=windows make fix-go
+		&& GOOS=darwin $(MAKE) fix-go \
+		&& GOOS=linux $(MAKE) fix-go \
+		&& GOOS=freebsd $(MAKE) fix-go \
+		&& GOOS=windows $(MAKE) fix-go
 	$(call footer, $@)
 
 fix-mod:
@@ -220,6 +220,12 @@ BINARY_PATH := ./bin/$(NAME)
 
 UNAME_S := $(shell uname -s)
 
+# Chromaprint
+CHROMAPRINT_VERSION := 1.6.0
+CHROMAPRINT_BUILD_DIR := tmp/chromaprint
+CHROMAPRINT_LIB := bin/libchromaprint.a
+CHROMAPRINT_HEADER := bin/chromaprint.h
+
 ## https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
 WARNING_OPTIONS := -Wall -Werror=format-security
 ## https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options
@@ -287,13 +293,13 @@ export CGO_CPPFLAGS := $(CPPFLAGS)
 export CGO_CXXFLAGS := $(CXXFLAGS)
 export CGO_LDFLAGS := $(LDFLAGS_C)
 
-build: ## Build the binary (PIE, release)
+build: $(CHROMAPRINT_LIB) ## Build the binary (PIE, release)
 	@echo "Building $(NAME)..."
 	@mkdir -p bin
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(NAME)
 	@echo "Binary built: $(BINARY_PATH)"
 
-build-debug: ## Build the binary (PIE, debug)
+build-debug: $(CHROMAPRINT_LIB) ## Build the binary (PIE, debug)
 build-debug: export CGO_CFLAGS := $(CFLAGS_DEBUG)
 build-debug: export CGO_CPPFLAGS := $(CPPFLAGS_DEBUG)
 build-debug: export CGO_CXXFLAGS := $(CXXFLAGS_DEBUG)
@@ -301,94 +307,43 @@ build-debug:
 	@echo "Building $(NAME) (debug)..."
 	@mkdir -p bin
 	$(GOBUILD_DEBUG) -o $(BINARY_PATH)-debug ./cmd/$(NAME)
-	@echo "Binary built: $(BINARY_PATH)"
+	@echo "Binary built: $(BINARY_PATH)-debug"
 
-build-static: ## Build static binary (Linux only, release)
+build-static: $(CHROMAPRINT_LIB) ## Build static binary (Linux only, release)
 	@echo "Building $(NAME) (static)..."
 	@mkdir -p bin
 	$(GOBUILD_STATIC) -o $(BINARY_PATH)-static ./cmd/$(NAME)
-	@echo "Binary built: $(BINARY_PATH)"
+	@echo "Binary built: $(BINARY_PATH)-static"
 
-## Binary name
-#BINARY_PATH := ./bin/$(NAME)
-#
-#UNAME_S := $(shell uname -s)
-#
-### https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
-#WARNING_OPTIONS := -Wall -Werror=format-security
-### https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options
-#OPTIMIZATION_OPTIONS := -O2
-### https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
-#DEBUGGING_OPTIONS := -grecord-gcc-switches -g
-### https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html#Preprocessor-Options
-## https://www.gnu.org/software/libc/manual/html_node/Source-Fortification.html
-#SECURITY_OPTIONS := -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS
-### Control flow integrity is amd64 only
-## -mcet -fcf-protection
-### https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
-#
-## C linker flags (passed to ld via CGO_LDFLAGS)
-#LDFLAGS_C :=
-#ifeq ($(UNAME_S),Linux)
-#    SECURITY_OPTIONS += -fstack-clash-protection
-#    LDFLAGS_C += -Wl,-z,defs -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
-#endif
-#
-## Go linker flags
-#LDFLAGS_VERSION := -X $(ORG)/$(NAME)/version.version=$(VERSION) \
-#    -X $(ORG)/$(NAME)/version.commit=$(COMMIT) \
-#    -X $(ORG)/$(NAME)/version.date=$(DATE)
-## -s strips symbol table, -w strips DWARF
-#LDFLAGS_BASE := -s -w -linkmode=external $(LDFLAGS_VERSION)
-#LDFLAGS_NOPIE := $(LDFLAGS_BASE) -extldflags='-static'
-#LDFLAGS_PIE := $(LDFLAGS_BASE) -extldflags='-pie'
-#
-## -pipe gives a little speed-up by using pipes instead of temp files
-#CFLAGS := $(WARNING_OPTIONS) $(OPTIMIZATION_OPTIONS) $(SECURITY_OPTIONS) -pipe
-#CPPFLAGS := -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS
-#CXXFLAGS := $(CFLAGS)
-#CGO_CFLAGS := $(CFLAGS)
-#export CGO_CFLAGS
-#CGO_CPPFLAGS := $(CPPFLAGS)
-#export CGO_CPPFLAGS
-#CGO_CXXFLAGS := $(CXXFLAGS)
-#export CGO_CXXFLAGS
-#CGO_LDFLAGS := $(LDFLAGS_C)
-#export CGO_LDFLAGS
-#
-## More reading:
-### https://news.ycombinator.com/item?id=18874113
-### https://developers.redhat.com/blog/2018/03/21/compiler-and-linker-flags-gcc
-### https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
-## https://github.com/golang/go/issues/26849
-#
-#GOFLAGS := -tags=cgo,netgo,osusergo,static_build
-#export GOFLAGS
-#
-## Linker optimization  CGO_LDFLAGS=-fuse-ld=lld
-#
-#GOCMD := go
-#
-#GOBUILD := $(GOCMD) build -trimpath -buildmode=pie -ldflags '$(LDFLAGS_PIE)'
-#GOBUILD_STATIC := $(GOCMD) build -trimpath -ldflags '$(LDFLAGS_NOPIE)'
-#
-#GOINSTALL := $(GOCMD) install
-#
-#build: ## Build the binary (PIE)
-#	@echo "Building $(NAME)..."
-#	@mkdir -p bin
-#	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(NAME)
-#	@echo "Binary built: $(BINARY_PATH)"
-#
-#build-static: ## Build static binary (Linux only)
-#	@echo "Building $(NAME) (static)..."
-#	@mkdir -p bin
-#	$(GOBUILD_STATIC) -o $(BINARY_PATH) ./cmd/$(NAME)
-#	@echo "Binary built: $(BINARY_PATH)"
-#
-## TODO: -gcflags=all="-N -l"
-#debug:
+chromaprint: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ## Build Chromaprint static library (MIT, KissFFT)
 
+$(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
+	@echo "=== Fetching Chromaprint $(CHROMAPRINT_VERSION) ==="
+	@rm -rf $(CHROMAPRINT_BUILD_DIR)
+	@mkdir -p $(CHROMAPRINT_BUILD_DIR) bin
+	@curl -fsSL "https://github.com/acoustid/chromaprint/releases/download/v$(CHROMAPRINT_VERSION)/chromaprint-$(CHROMAPRINT_VERSION).tar.gz" \
+		| tar xz -C $(CHROMAPRINT_BUILD_DIR)
+	@echo "=== Building Chromaprint (static, KissFFT) ==="
+	@cd $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION) && \
+		mkdir -p build && \
+		cd build && \
+		cmake .. \
+			-DCMAKE_BUILD_TYPE=Release \
+			-DCMAKE_C_FLAGS="$(CFLAGS)" \
+			-DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
+			-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS_C)" \
+			-DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS_C)" \
+			-DBUILD_SHARED_LIBS=OFF \
+			-DBUILD_TOOLS=OFF \
+			-DBUILD_TESTS=OFF \
+			-DFFT_LIB=kissfft && \
+		$(MAKE)
+	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/build/src/libchromaprint.a bin/
+	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/src/chromaprint.h bin/
+	@echo "=== Chromaprint built: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ==="
+
+clean-chromaprint: ## Clean Chromaprint build artifacts
+	@rm -rf $(CHROMAPRINT_BUILD_DIR) $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER)
 
 install: ## Install to GOPATH/bin
 	@echo "Installing $(NAME)..."
