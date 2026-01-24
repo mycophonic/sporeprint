@@ -1,13 +1,16 @@
-ORG_PREFIXES := "github.com/farcloser"
+CGO_ENABLED := 1
+NAME := sporeprint
 ICON := "🧿"
+ORG := github.com/farcloser
 
 MAKEFILE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 VERSION ?= $(shell git -C $(MAKEFILE_DIR) describe --match 'v[0-9]*' --dirty='.m' --always --tags 2>/dev/null \
 	|| echo "no_git_information")
 VERSION_TRIMMED := $(VERSION:v%=%)
-REVISION ?= $(shell git -C $(MAKEFILE_DIR) rev-parse HEAD 2>/dev/null || echo "no_git_information")$(shell \
+COMMIT ?= $(shell git -C $(MAKEFILE_DIR) rev-parse HEAD 2>/dev/null || echo "no_git_information")$(shell \
 	if ! git -C $(MAKEFILE_DIR) diff --no-ext-diff --quiet --exit-code 2>/dev/null; then echo .m; fi)
 LINT_COMMIT_RANGE ?= main..HEAD
+DATE = "$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 ifdef VERBOSE
 	VERBOSE_FLAG := -v
@@ -212,30 +215,187 @@ test-unit-race:
 	test-unit test-unit-race test-unit-bench \
 	build install clean
 
-# Default target
-.DEFAULT_GOAL := help
-
 # Binary name
-BINARY_NAME=sporeprint
-BINARY_PATH=./bin/$(BINARY_NAME)
+BINARY_PATH := ./bin/$(NAME)
 
-# Go parameters
-GOCMD=go
-GOBUILD=$(GOCMD) build
-GOINSTALL=$(GOCMD) install
+UNAME_S := $(shell uname -s)
 
-build: ## Build the binary
-	@echo "Building $(BINARY_NAME)..."
+## https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+WARNING_OPTIONS := -Wall -Werror=format-security
+## https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options
+OPTIMIZATION_OPTIONS := -O2
+OPTIMIZATION_OPTIONS_DEBUG := -O0
+## https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
+DEBUGGING_OPTIONS := -grecord-gcc-switches -g
+## https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html#Preprocessor-Options
+# https://www.gnu.org/software/libc/manual/html_node/Source-Fortification.html
+SECURITY_OPTIONS := -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2
+## Control flow integrity is amd64 only
+# -mcet -fcf-protection
+
+# C linker flags (passed to ld via CGO_LDFLAGS)
+LDFLAGS_C :=
+ifeq ($(UNAME_S),Linux)
+    SECURITY_OPTIONS += -fstack-clash-protection
+    LDFLAGS_C += -Wl,-z,defs -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
+endif
+
+# C compiler flags
+# -pipe gives a little speed-up by using pipes instead of temp files
+CFLAGS := $(WARNING_OPTIONS) $(OPTIMIZATION_OPTIONS) $(SECURITY_OPTIONS) -pipe
+CFLAGS_DEBUG := $(WARNING_OPTIONS) $(OPTIMIZATION_OPTIONS_DEBUG) $(DEBUGGING_OPTIONS) -D_GLIBCXX_ASSERTIONS -pipe
+CPPFLAGS := -D_FORTIFY_SOURCE=2
+CPPFLAGS_DEBUG := -D_GLIBCXX_ASSERTIONS
+CXXFLAGS := $(CFLAGS)
+CXXFLAGS_DEBUG := $(CFLAGS_DEBUG)
+
+# Go linker flags
+# -s strips symbol table, -w strips DWARF
+LDFLAGS_VERSION := -X $(ORG)/$(NAME)/version.version=$(VERSION) \
+    -X $(ORG)/$(NAME)/version.commit=$(COMMIT) \
+    -X $(ORG)/$(NAME)/version.date=$(DATE)
+LDFLAGS_BASE := -linkmode=external $(LDFLAGS_VERSION)
+LDFLAGS_RELEASE := -s -w $(LDFLAGS_BASE) -extldflags='-pie'
+LDFLAGS_DEBUG := $(LDFLAGS_BASE) -extldflags='-pie'
+LDFLAGS_STATIC := -s -w $(LDFLAGS_BASE) -extldflags='-static'
+
+# Go compiler flags
+# -N disables optimizations, -l disables inlining
+GCFLAGS_DEBUG := all=-N -l
+
+# More reading:
+## https://news.ycombinator.com/item?id=18874113
+## https://developers.redhat.com/blog/2018/03/21/compiler-and-linker-flags-gcc
+## https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
+# https://github.com/golang/go/issues/26849
+
+GOFLAGS := -tags=cgo,netgo,osusergo,static_build
+export GOFLAGS
+
+# Linker optimization  CGO_LDFLAGS=-fuse-ld=lld
+
+GOCMD := go
+GOBUILD := $(GOCMD) build -trimpath -buildmode=pie -ldflags '$(LDFLAGS_RELEASE)'
+GOBUILD_DEBUG := $(GOCMD) build -buildmode=pie -gcflags='$(GCFLAGS_DEBUG)' -ldflags '$(LDFLAGS_DEBUG)'
+GOBUILD_STATIC := $(GOCMD) build -trimpath -ldflags '$(LDFLAGS_STATIC)'
+
+GOINSTALL := $(GOCMD) install
+
+# Export CGO flags for release builds by default
+export CGO_CFLAGS := $(CFLAGS)
+export CGO_CPPFLAGS := $(CPPFLAGS)
+export CGO_CXXFLAGS := $(CXXFLAGS)
+export CGO_LDFLAGS := $(LDFLAGS_C)
+
+build: ## Build the binary (PIE, release)
+	@echo "Building $(NAME)..."
 	@mkdir -p bin
-	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(BINARY_NAME)
+	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(NAME)
 	@echo "Binary built: $(BINARY_PATH)"
 
+build-debug: ## Build the binary (PIE, debug)
+build-debug: export CGO_CFLAGS := $(CFLAGS_DEBUG)
+build-debug: export CGO_CPPFLAGS := $(CPPFLAGS_DEBUG)
+build-debug: export CGO_CXXFLAGS := $(CXXFLAGS_DEBUG)
+build-debug:
+	@echo "Building $(NAME) (debug)..."
+	@mkdir -p bin
+	$(GOBUILD_DEBUG) -o $(BINARY_PATH)-debug ./cmd/$(NAME)
+	@echo "Binary built: $(BINARY_PATH)"
+
+build-static: ## Build static binary (Linux only, release)
+	@echo "Building $(NAME) (static)..."
+	@mkdir -p bin
+	$(GOBUILD_STATIC) -o $(BINARY_PATH)-static ./cmd/$(NAME)
+	@echo "Binary built: $(BINARY_PATH)"
+
+## Binary name
+#BINARY_PATH := ./bin/$(NAME)
+#
+#UNAME_S := $(shell uname -s)
+#
+### https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+#WARNING_OPTIONS := -Wall -Werror=format-security
+### https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options
+#OPTIMIZATION_OPTIONS := -O2
+### https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
+#DEBUGGING_OPTIONS := -grecord-gcc-switches -g
+### https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html#Preprocessor-Options
+## https://www.gnu.org/software/libc/manual/html_node/Source-Fortification.html
+#SECURITY_OPTIONS := -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS
+### Control flow integrity is amd64 only
+## -mcet -fcf-protection
+### https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
+#
+## C linker flags (passed to ld via CGO_LDFLAGS)
+#LDFLAGS_C :=
+#ifeq ($(UNAME_S),Linux)
+#    SECURITY_OPTIONS += -fstack-clash-protection
+#    LDFLAGS_C += -Wl,-z,defs -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
+#endif
+#
+## Go linker flags
+#LDFLAGS_VERSION := -X $(ORG)/$(NAME)/version.version=$(VERSION) \
+#    -X $(ORG)/$(NAME)/version.commit=$(COMMIT) \
+#    -X $(ORG)/$(NAME)/version.date=$(DATE)
+## -s strips symbol table, -w strips DWARF
+#LDFLAGS_BASE := -s -w -linkmode=external $(LDFLAGS_VERSION)
+#LDFLAGS_NOPIE := $(LDFLAGS_BASE) -extldflags='-static'
+#LDFLAGS_PIE := $(LDFLAGS_BASE) -extldflags='-pie'
+#
+## -pipe gives a little speed-up by using pipes instead of temp files
+#CFLAGS := $(WARNING_OPTIONS) $(OPTIMIZATION_OPTIONS) $(SECURITY_OPTIONS) -pipe
+#CPPFLAGS := -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS
+#CXXFLAGS := $(CFLAGS)
+#CGO_CFLAGS := $(CFLAGS)
+#export CGO_CFLAGS
+#CGO_CPPFLAGS := $(CPPFLAGS)
+#export CGO_CPPFLAGS
+#CGO_CXXFLAGS := $(CXXFLAGS)
+#export CGO_CXXFLAGS
+#CGO_LDFLAGS := $(LDFLAGS_C)
+#export CGO_LDFLAGS
+#
+## More reading:
+### https://news.ycombinator.com/item?id=18874113
+### https://developers.redhat.com/blog/2018/03/21/compiler-and-linker-flags-gcc
+### https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html
+## https://github.com/golang/go/issues/26849
+#
+#GOFLAGS := -tags=cgo,netgo,osusergo,static_build
+#export GOFLAGS
+#
+## Linker optimization  CGO_LDFLAGS=-fuse-ld=lld
+#
+#GOCMD := go
+#
+#GOBUILD := $(GOCMD) build -trimpath -buildmode=pie -ldflags '$(LDFLAGS_PIE)'
+#GOBUILD_STATIC := $(GOCMD) build -trimpath -ldflags '$(LDFLAGS_NOPIE)'
+#
+#GOINSTALL := $(GOCMD) install
+#
+#build: ## Build the binary (PIE)
+#	@echo "Building $(NAME)..."
+#	@mkdir -p bin
+#	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(NAME)
+#	@echo "Binary built: $(BINARY_PATH)"
+#
+#build-static: ## Build static binary (Linux only)
+#	@echo "Building $(NAME) (static)..."
+#	@mkdir -p bin
+#	$(GOBUILD_STATIC) -o $(BINARY_PATH) ./cmd/$(NAME)
+#	@echo "Binary built: $(BINARY_PATH)"
+#
+## TODO: -gcflags=all="-N -l"
+#debug:
+
+
 install: ## Install to GOPATH/bin
-	@echo "Installing $(BINARY_NAME)..."
-	$(GOINSTALL) ./cmd/$(BINARY_NAME)
-	@echo "Installed to $$(go env GOPATH)/bin/$(BINARY_NAME)"
+	@echo "Installing $(NAME)..."
+	$(GOINSTALL) ./cmd/$(NAME)
+	@echo "Installed to $$(go env GOPATH)/bin/$(NAME)"
 
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
-	@rm -rf bin/$(BINARY_NAME)
+	@rm -rf bin/$(NAME)
 	@echo "Clean complete"

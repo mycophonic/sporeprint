@@ -1,8 +1,15 @@
 package version
 
-var version = "0.1.0-dev"
+var (
+	version = "0.1.0-dev"
+	name    = "sporeprint"
+	commit  = "undefined"
+)
 
-var name = "quark" //nolint:gochecknoglobals // Set via ldflags at build time.
+// Commit returns the compile time commit.
+func Commit() string {
+	return commit
+}
 
 // Version returns the compile time version.
 func Version() string {

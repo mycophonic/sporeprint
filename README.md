@@ -100,10 +100,3 @@ See [COMPAT](docs/COMPAT.md)
 ## The landscape of audio fingerprinting and why Chromaprint
 
 See [LANDSCAPE](docs/LANDSCAPE.md).
-
-
-## TODO
-
-1. Some golangci-lint linters are apparently screwing the pooch with cgo.
-Need to review the rules in there.
-2. build command is unoptimized
