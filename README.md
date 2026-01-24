@@ -1,6 +1,6 @@
 # Sporeprint
 
-> * an audio fingerprinting tool with cgo bindings for Chromaprint
+> * an audio fingerprinting cli tool and cgo library binding Chromaprint
 > * [the powdery deposit obtained by allowing spores of a fungal fruit body to fall onto a surface underneath](https://en.wikipedia.org/wiki/Spore_print)
 
 ![logo.png](logo.png)
@@ -8,7 +8,7 @@
 
 ## Purpose
 
-fpcalc (the Chromaprint default command line tools) heavily relies on ffmpeg, and Chromaprint
+fpcalc (the Chromaprint default command line tools) heavily relies on ffmpeg, and Chromaprint itself
 offers multiple different FFT backends with a variety of licenses.
 
 While this is fine for users, the [licensing situation](https://github.com/acoustid/chromaprint/blob/master/LICENSE.md)
@@ -20,7 +20,7 @@ Sporeprint (Apache license) addresses the first problem by linking solely agains
 compiled only with [KissFFT](https://github.com/mborgerding/kissfft) (BSD-3), and offers go bindings for Chromaprint, making it
 possible to integrate as a library without having to shell out.
 
-TL;DR sporeprint is "fpcalc-light" for the go world, without license minefield or dynamic linkage.
+TL;DR sporeprint is "fpcalc-light" for the go world, without license minefield or dynamic linkage fuckery.
 
 ## Trade-offs
 
@@ -38,20 +38,23 @@ Or at least yields different results than ffmpeg.
 
 This problem is presumably hidden because fpcalc itself does resample to the final desired format (using ffmpeg)
 _before_ calling Chromaprint methods. The bottom-line is still: it seems you cannot reliably use Chromaprint without
-taking care of the downsampling yourself.
+taking care of the downsampling yourself (which fpcalc does).
+
+Finally, fpcalc itself is adding some extra filtering into the mix (cutoff 0.8).
+
+To obtain the same fingerprints with sporeprint, you thus need the following ffmpeg invocation:
 
 ```bash
-ffmpeg -i track.flac -f s16le -ar 11025 -ac 1 pipe:1 2>/dev/null | sporeprint
+ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint
 ```
 
-fpcalc will yield the same results when used with stdin:
+fpcalc will yield the same results (but see below):
 ```bash
-ffmpeg -i track.flac -f s16le -ar 11025 -ac 1 pipe:1 2>/dev/null | fpcalc -format s16le -rate 11025 -channels 1  -
+# Or
+fpalc track.flac
 ```
 
-Obviously, the result may deviate slightly when using fpcalc directly on the source file (ffmpeg versions variants is a possible culprit).
-
-Why mono and 11025?
+So, why mono and 11025?
 
 Presumably Chromaprint authors figured this was the sweet spot for accuracy vs. speed, which certainly makes sense.
 
@@ -74,21 +77,33 @@ make build
 
 Binary will be in `bin/sporeprint`.
 
+## Develop
+
+```bash
+make lint
+make fix
+make test
+```
+
 ## Using in Go
 
 Obviously you need to accept CGO.
 
-See `cmd/sporeprint/main.go` for a working example, or just shell out to the provided binary.
+See `cmd/sporeprint/main.go` for a working example.
 
-## Status
+Or just shell out to the provided binary.
 
-Sporeprint has been tested against a mixture of about 10k files, providing the same fingerprint as fpcalc (stdin mode).
+## Compatibility & performance
 
-In terms of performance, both tools perform exactly the same, which is unsurprising given Chromaprint FFT bears the grunt
-of the cost.
+See [COMPAT](docs/COMPAT.md)
 
-## Caveats
+## The landscape of audio fingerprinting and why Chromaprint
 
-1. Some golangci-lint are apparently screwing the pooch with cgo.
+See [LANDSCAPE](docs/LANDSCAPE.md).
+
+
+## TODO
+
+1. Some golangci-lint linters are apparently screwing the pooch with cgo.
 Need to review the rules in there.
 2. build command is unoptimized

@@ -124,9 +124,6 @@ linters:
     # MAYBE disable revive file-header
 
   disable:
-    # nlreturn is apparently buggy in cgo contexts
-    # - nlreturn
-
     # These are the linters that we know we do not want
     - copyloopvar       # no longer needed after go 1.22
     - errchkjson        # forces handling of json err (eg: prevents _), which is too much
@@ -270,7 +267,8 @@ linters:
             - $all
           allow:
             - $gostd
-            - github.com/farcloser/sporeprint/pkg/chromaprint
+            - github.com/farcloser/primordium
+            - github.com/farcloser/sporeprint
             - github.com/urfave/cli/v3
 
     staticcheck:

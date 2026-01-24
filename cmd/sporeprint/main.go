@@ -12,7 +12,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/farcloser/sporeprint/pkg/chromaprint"
+	"github.com/farcloser/primordium/app"
+
+	"github.com/farcloser/sporeprint/chromaprint"
+	"github.com/farcloser/sporeprint/version"
 )
 
 // See README.
@@ -21,24 +24,28 @@ const (
 	channels        = 1
 	defaultDuration = 120
 	bufferSize      = 8192
-	samplesSize     = 4096
 )
 
 var (
-	ErrEncodeFailure      = errors.New("encode failure")
 	ErrChromaprintFailure = errors.New("chromaprint error")
 	ErrReadFailure        = errors.New("read error")
 )
 
 func main() {
-	cmd := &cli.Command{
-		Name:  "sporeprint",
-		Usage: "Generate audio fingerprints from raw PCM via stdin",
+	ctx := context.Background()
+	app.New(ctx, version.Name())
+
+	appl := &cli.Command{
+		Name:    version.Name(),
+		Usage:   "Generate audio fingerprints from raw PCM via stdin",
+		Version: version.Version(),
 		Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
 
 Chromaprint expects 11025 Hz mono input s16le. Example:
 
-  ffmpeg -i track.flac -f s16le -ar 11025 -ac 1 pipe:1 2>/dev/null | sporeprint`,
+  ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint
+
+The aresample filter parameters ensure identical output to fpcalc.`,
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "length",
@@ -55,7 +62,7 @@ Chromaprint expects 11025 Hz mono input s16le. Example:
 		Action: run,
 	}
 
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
+	if err := appl.Run(ctx, os.Args); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 
 		os.Exit(1)
@@ -70,7 +77,6 @@ func run(_ context.Context, cliCom *cli.Command) error {
 	}
 
 	length := cliCom.Int("length")
-	byteOrder := binary.LittleEndian
 
 	chroma := chromaprint.New()
 	defer chroma.Free()
@@ -86,7 +92,7 @@ func run(_ context.Context, cliCom *cli.Command) error {
 	}
 
 	buf := make([]byte, bufferSize)
-	samples := make([]int16, samplesSize)
+	samples := make([]int16, bufferSize/2)
 	totalFed := 0
 
 	for {
@@ -103,9 +109,14 @@ func run(_ context.Context, cliCom *cli.Command) error {
 
 		// Convert bytes to int16 samples
 		numSamples := nread / 2
-		for i := range numSamples {
-			samples[i] = int16(byteOrder.Uint16(buf[i*2:]))
+		for i := 0; i+1 < nread; i += 2 {
+			//nolint:gosec // samples size = 1/2 buffer size
+			samples[i/2] = int16(binary.LittleEndian.Uint16(buf[i : i+2]))
 		}
+		// numSamples := nread / 2
+		// for i := range numSamples {
+		//	samples[i] = int16(byteOrder.Uint16(buf[i*2:]))
+		// }
 
 		// Apply length limit
 		toFeed := numSamples

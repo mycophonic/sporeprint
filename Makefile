@@ -42,7 +42,7 @@ help:
 	$(call footer, $@)
 
 # Tasks
-lint: lint-go-all lint-commits lint-mod lint-licenses-all lint-headers lint-yaml lint-shell ## Lint project
+lint: lint-go lint-commits lint-mod lint-licenses-all lint-headers lint-yaml lint-shell lint-go-all
 
 fix: fix-go-all fix-mod ## Automatically fix some issues
 
@@ -54,7 +54,7 @@ unit: test-unit test-unit-race test-unit-bench ## Run unit tests
 # Linting tasks
 ##########################
 lint-go:
-	$(call title, $@)
+	$(call title, $@ $(GOOS))
 	@cd $(MAKEFILE_DIR) \
 		&& golangci-lint run $(VERBOSE_FLAG_LONG) ./...
 	$(call footer, $@)
@@ -74,9 +74,10 @@ lint-yaml:
 		&& yamllint .
 	$(call footer, $@)
 
-lint-shell: $(call recursive_wildcard,$(MAKEFILE_DIR)/,*.sh)
+lint-shell:
 	$(call title, $@)
-	@if [ -n "$^" ]; then shellcheck -a -x $^; else echo "No shell scripts found, skipping shellcheck"; fi
+	@files=$$(find $(MAKEFILE_DIR) -name '*.sh' ! -path '*/tmp/*' ! -path '*/_*' 2>/dev/null); \
+        if [ -n "$$files" ]; then shellcheck -a -x $$files; else echo "No shell scripts found, skipping shellcheck"; fi
 	$(call footer, $@)
 
 # See https://github.com/andyfeller/gh-ssh-allowed-signers for automation to retrieve contributors keys
@@ -171,13 +172,14 @@ install-dev-jsonschema:
 
 install-dev-tools: install-dev-gotestsum install-dev-jsonschema
 	$(call title, $@)
-	# golangci: v2.7.1 (2025-12-04)
-	# git-validation: main (2025-02-25)
-	# ltag: main (2025-03-04)
-	# go-licenses: v2.0.1 (2025-10-21)
+	# 2026-01-23
+	# - golangci: v2.8.0
+	# - git-validation: main
+	# - ltag: main
+	# - go-licenses: v2.0.1
 	@cd $(MAKEFILE_DIR) \
-		&& go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@a4b55ebc3471c9fbb763fd56eefede8050f99887 \
-		&& go install github.com/vbatts/git-validation@7b60e35b055dd2eab5844202ffffad51d9c93922 \
+		&& go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@e2e40021c9007020676c93680a36e3ab06c6cd33 \
+		&& go install github.com/vbatts/git-validation@a8d455533459b620fa656bad095b943e70cede9b \
 		&& go install github.com/containerd/ltag@66e6a514664ee2d11a470735519fa22b1a9eaabd \
 		&& go install github.com/google/go-licenses/v2@3e084b0caf710f7bfead967567539214f598c0a2
 	@echo "Remember to add \$$HOME/go/bin to your path"

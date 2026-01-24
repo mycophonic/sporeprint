@@ -2,8 +2,8 @@
 package chromaprint
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../bin
-#cgo LDFLAGS: ${SRCDIR}/../../bin/libchromaprint.a -lstdc++ -lm
+#cgo CFLAGS: -I${SRCDIR}/../bin
+#cgo LDFLAGS: ${SRCDIR}/../bin/libchromaprint.a -lstdc++ -lm
 #include "chromaprint.h"
 #include <stdlib.h>
 */
