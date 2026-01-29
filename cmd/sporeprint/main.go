@@ -38,7 +38,7 @@ func main() {
 	appl := &cli.Command{
 		Name:    version.Name(),
 		Usage:   "Generate audio fingerprints from raw PCM via stdin",
-		Version: version.Version(),
+		Version: version.Version() + " (" + version.Commit() + " - " + version.Date() + ")",
 		Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
 
 Chromaprint expects 11025 Hz mono input s16le. Example:

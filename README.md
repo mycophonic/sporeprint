@@ -3,7 +3,7 @@
 > * an audio fingerprinting cli tool and cgo library binding Chromaprint
 > * [the powdery deposit obtained by allowing spores of a fungal fruit body to fall onto a surface underneath](https://en.wikipedia.org/wiki/Spore_print)
 
-![logo.png](logo.png)
+![Sporeprint](logo.png)
 
 
 ## Purpose

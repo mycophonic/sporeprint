@@ -163,14 +163,7 @@ install-dev-gotestsum:
 		&& go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f
 	$(call footer, $@)
 
-install-dev-jsonschema:
-	# go-jsonschema: v0.20.0 (omissis fork, 2025-06-19)
-	$(call title, $@)
-	@cd $(MAKEFILE_DIR) \
-		&& go install github.com/atombender/go-jsonschema@v0.20.0
-	$(call footer, $@)
-
-install-dev-tools: install-dev-gotestsum install-dev-jsonschema
+install-dev-tools: install-dev-gotestsum
 	$(call title, $@)
 	# 2026-01-23
 	# - golangci: v2.8.0
@@ -259,6 +252,7 @@ CXXFLAGS_DEBUG := $(CFLAGS_DEBUG)
 # -s strips symbol table, -w strips DWARF
 LDFLAGS_VERSION := -X $(ORG)/$(NAME)/version.version=$(VERSION) \
     -X $(ORG)/$(NAME)/version.commit=$(COMMIT) \
+    -X $(ORG)/$(NAME)/version.name=$(NAME) \
     -X $(ORG)/$(NAME)/version.date=$(DATE)
 LDFLAGS_BASE := -linkmode=external $(LDFLAGS_VERSION)
 LDFLAGS_RELEASE := -s -w $(LDFLAGS_BASE) -extldflags='-pie'
