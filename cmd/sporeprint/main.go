@@ -1,5 +1,3 @@
-// Package main provides a sample cli implementation for a fingerprinting tool using chromaprint.
-// See main README.md for details.
 package main
 
 import (
