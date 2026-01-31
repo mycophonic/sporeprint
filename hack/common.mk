@@ -73,6 +73,12 @@ fix: ## Automatically fix some issues
 endif
 
 ifeq ($(HAS_GO),true)
+all: clean build lint test ## Clean, build, lint, and test everything
+else
+all: clean lint ## Clean and lint everything
+endif
+
+ifeq ($(HAS_GO),true)
 test: unit ## Run all tests
 unit: test-unit test-unit-race test-unit-bench test-unit-cover ## Run unit tests
 else
@@ -346,6 +352,7 @@ test-unit-cover: ## Run tests with coverage reporting
 	$(call footer, $@)
 
 .PHONY: \
+	all \
 	lint \
 	fix \
 	test \
