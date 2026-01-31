@@ -171,6 +171,13 @@ up:
 ##########################
 # Development tools installation
 ##########################
+# Dev tool installs must clear project CGO flags — these tools are unrelated
+# third-party binaries and must not inherit hardening flags like -fPIE that
+# conflict with Go's default non-PIE link mode for `go install`.
+install-dev-gotestsum: export CGO_CFLAGS :=
+install-dev-gotestsum: export CGO_CXXFLAGS :=
+install-dev-gotestsum: export CGO_CPPFLAGS :=
+install-dev-gotestsum: export CGO_LDFLAGS :=
 install-dev-gotestsum:
 	# gotestsum: 1.13.0 (2025-10-21)
 	$(call title, $@)
@@ -178,6 +185,10 @@ install-dev-gotestsum:
 		&& go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f
 	$(call footer, $@)
 
+install-dev-tools: export CGO_CFLAGS :=
+install-dev-tools: export CGO_CXXFLAGS :=
+install-dev-tools: export CGO_CPPFLAGS :=
+install-dev-tools: export CGO_LDFLAGS :=
 install-dev-tools: install-dev-gotestsum
 	$(call title, $@)
 	# 2026-01-23
@@ -208,6 +219,40 @@ test-unit-race:
 	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) $(PROJECT_DIR)/... -race
 	$(call footer, $@)
 
+PROF_DIR := $(PROJECT_DIR)/bin/profiles
+PROF_DOCS_DIR := $(PROJECT_DIR)/docs/profiles
+
+test-unit-profile: ## Run tests with CPU and memory profiling
+	$(call title, $@)
+	@mkdir -p $(PROF_DIR) $(PROF_DOCS_DIR)
+	@for pkg in $$(go list $(PROJECT_DIR)/...); do \
+		name=$$(echo "$$pkg" | sed "s|.*/||"); \
+		echo "Profiling $$pkg..."; \
+		go test -count 1 $(VERBOSE_FLAG) -o "$(PROF_DIR)/$${name}.test" "$$pkg" \
+			-cpuprofile "$(PROF_DIR)/$${name}_cpu.prof" \
+			-memprofile "$(PROF_DIR)/$${name}_mem.prof" || true; \
+		if [ -s "$(PROF_DIR)/$${name}_cpu.prof" ]; then \
+			echo "  CPU profile (top 20):"; \
+			go tool pprof -top -nodecount=20 "$(PROF_DIR)/$${name}_cpu.prof" 2>/dev/null || true; \
+			go tool pprof -png -nodecount=20 "$(PROF_DIR)/$${name}_cpu.prof" \
+				> "$(PROF_DOCS_DIR)/$${name}_cpu.png" 2>/dev/null \
+				&& echo "  -> $(PROF_DOCS_DIR)/$${name}_cpu.png" \
+				|| echo "  (skipped PNG: graphviz not installed)"; \
+		fi; \
+		if [ -s "$(PROF_DIR)/$${name}_mem.prof" ]; then \
+			echo "  Memory profile — alloc_space (top 20):"; \
+			go tool pprof -top -nodecount=20 -alloc_space "$(PROF_DIR)/$${name}_mem.prof" 2>/dev/null || true; \
+			go tool pprof -png -nodecount=20 -alloc_space "$(PROF_DIR)/$${name}_mem.prof" \
+				> "$(PROF_DOCS_DIR)/$${name}_alloc.png" 2>/dev/null \
+				&& echo "  -> $(PROF_DOCS_DIR)/$${name}_alloc.png" \
+				|| echo "  (skipped PNG: graphviz not installed)"; \
+		fi; \
+	done
+	@echo "Profiles written to $(PROF_DIR)/"
+	@echo "Diagrams written to $(PROF_DOCS_DIR)/"
+	@echo "Analyze interactively: go tool pprof <profile>"
+	$(call footer, $@)
+
 .PHONY: \
 	lint \
 	fix \
@@ -217,8 +262,8 @@ test-unit-race:
 	install-dev-tools install-dev-gotestsum \
 	lint-commits lint-go lint-go-all lint-headers lint-licenses lint-licenses-all lint-mod lint-shell lint-yaml \
 	fix-go fix-go-all fix-mod \
-	test-unit test-unit-race test-unit-bench \
-	build build-debug build-static install clean
+	test-unit test-unit-race test-unit-bench test-unit-profile \
+	build build-debug build-static install verify clean
 
 # Default target
 .DEFAULT_GOAL := help
@@ -263,6 +308,17 @@ GCFLAGS_DEBUG := all=-N -l
 #   https://github.com/golang/go/issues/26849
 
 UNAME_S := $(shell uname -s)
+
+# Windows detection: the OS environment variable is set to "Windows_NT" on all
+# modern Windows versions (cmd, PowerShell, Git Bash, MSYS2). Unlike uname,
+# this works regardless of which shell Make uses to execute $(shell ...).
+# On Windows, force MinGW Makefiles for CMake so that static libraries are
+# ABI-compatible with Go's CGO (which uses MinGW GCC, not MSVC).
+ifeq ($(OS),Windows_NT)
+    CMAKE_GENERATOR := -G "MinGW Makefiles"
+else
+    CMAKE_GENERATOR :=
+endif
 
 # Warning flags
 C_WARNING_OPTIONS := -Wall -Werror=format-security
@@ -394,6 +450,11 @@ build-static-debug: $(addprefix build-static-debug-,$(BINARIES)) ## Build static
 install: ## Install all binaries to GOPATH/bin
 ifneq ($(BINARIES),)
 	@$(foreach bin,$(BINARIES),echo "Installing $(bin)..." && $(GOINSTALL) ./cmd/$(bin) && echo "Installed to $$(go env GOPATH)/bin/$(bin)" &&) true
+endif
+
+verify: ## Verify all binaries run (--version)
+ifneq ($(BINARIES),)
+	@$(foreach bin,$(BINARIES),echo "Verifying $(bin)..." && $(BINARY_DIR)/$(bin) --version &&) true
 endif
 
 clean: ## Clean build artifacts

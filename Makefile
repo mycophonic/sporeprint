@@ -9,7 +9,7 @@ include hack/common.mk
 ##########################
 
 CHROMAPRINT_VERSION := 1.6.0
-CHROMAPRINT_BUILD_DIR := tmp/chromaprint
+CHROMAPRINT_BUILD_DIR := bin/tmp/chromaprint
 CHROMAPRINT_LIB := bin/libchromaprint.a
 CHROMAPRINT_HEADER := bin/chromaprint.h
 
@@ -31,6 +31,7 @@ $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 		mkdir -p build && \
 		cd build && \
 		cmake .. \
+			$(CMAKE_GENERATOR) \
 			-DCMAKE_BUILD_TYPE=Release \
 			-DCMAKE_C_FLAGS="$(C_CFLAGS_RELEASE)" \
 			-DCMAKE_CXX_FLAGS="$(C_CXXFLAGS_RELEASE)" \
@@ -40,7 +41,7 @@ $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 			-DBUILD_TOOLS=OFF \
 			-DBUILD_TESTS=OFF \
 			-DFFT_LIB=kissfft && \
-		$(MAKE)
+		cmake --build . --config Release
 	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/build/src/libchromaprint.a bin/
 	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/src/chromaprint.h bin/
 	@echo "=== Chromaprint built: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ==="

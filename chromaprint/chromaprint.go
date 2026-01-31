@@ -2,6 +2,7 @@ package chromaprint
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../bin
+#cgo windows CFLAGS: -DCHROMAPRINT_NODLL
 #cgo LDFLAGS: ${SRCDIR}/../bin/libchromaprint.a -lstdc++ -lm
 #include "chromaprint.h"
 #include <stdlib.h>
