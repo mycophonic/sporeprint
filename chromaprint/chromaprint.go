@@ -35,6 +35,8 @@ var (
 	ErrFingerprint = errors.New("chromaprint: fingerprinting failed")
 	// ErrFreed happens when the context has been already freed.
 	ErrFreed = errors.New("chromaprint: context already freed")
+	// ErrDecode happens when decoding an encoded fingerprint fails.
+	ErrDecode = errors.New("chromaprint: decode failed")
 )
 
 // Context wraps a ChromaprintContext.
@@ -103,37 +105,47 @@ func (c *Context) Finish() error {
 	return nil
 }
 
-// Fingerprint returns the calculated fingerprint as both a raw subfingerprint
-// array and a compressed base64-encoded string.
-func (c *Context) Fingerprint() ([]uint32, string, error) {
+// Fingerprint returns the calculated fingerprint as a compressed
+// base64-encoded string. Use [Decode] to obtain the raw uint32 array
+// for comparison operations.
+func (c *Context) Fingerprint() (string, error) {
 	if c.ctx == nil {
-		return nil, "", ErrFreed
+		return "", ErrFreed
 	}
 
-	// Get raw fingerprint (uint32 subfingerprints).
-	var rawPtr *C.uint32_t
-	var rawSize C.int
-
-	if C.chromaprint_get_raw_fingerprint(c.ctx, &rawPtr, &rawSize) != 1 {
-		return nil, "", ErrFingerprint
-	}
-
-	raw := make([]uint32, int(rawSize))
-	copy(raw, unsafe.Slice((*uint32)(unsafe.Pointer(rawPtr)), int(rawSize)))
-
-	C.chromaprint_dealloc(unsafe.Pointer(rawPtr))
-
-	// Get compressed fingerprint (base64 string).
 	var encoded *C.char
 	if C.chromaprint_get_fingerprint(c.ctx, &encoded) != 1 {
-		return nil, "", ErrFingerprint
+		return "", ErrFingerprint
 	}
 
 	fp := C.GoString(encoded)
 
 	C.chromaprint_dealloc(unsafe.Pointer(encoded))
 
-	return raw, fp, nil
+	return fp, nil
+}
+
+// Decode converts a base64-encoded Chromaprint fingerprint (as returned by
+// [Context.Fingerprint]) into a raw uint32 subfingerprint array suitable for
+// comparison operations.
+func Decode(encoded string) ([]uint32, error) {
+	cEncoded := C.CString(encoded)
+	defer C.free(unsafe.Pointer(cEncoded))
+
+	var rawPtr *C.uint32_t
+	var rawSize C.int
+	var algorithm C.int
+
+	if C.chromaprint_decode_fingerprint(cEncoded, C.int(len(encoded)), &rawPtr, &rawSize, &algorithm, 1) != 1 {
+		return nil, ErrDecode
+	}
+
+	defer C.chromaprint_dealloc(unsafe.Pointer(rawPtr))
+
+	raw := make([]uint32, int(rawSize))
+	copy(raw, unsafe.Slice((*uint32)(unsafe.Pointer(rawPtr)), int(rawSize)))
+
+	return raw, nil
 }
 
 // Version returns the Chromaprint library version string.

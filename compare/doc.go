@@ -14,5 +14,13 @@
    limitations under the License.
 */
 
-// Package version simply exposes product name and version, meant to be overwritten at build time.
-package version
+// Package compare provides Chromaprint fingerprint comparison.
+//
+// All public functions accept base64-encoded fingerprints as returned by
+// [github.com/mycophonic/sporeprint/chromaprint.Context.Fingerprint].
+// Decoding to raw uint32 arrays is handled internally via
+// [github.com/mycophonic/sporeprint/chromaprint.Decode].
+//
+// Based on the AcoustID PostgreSQL matching function.
+// Reference: https://oxygene.sk/2011/01/how-does-chromaprint-work/
+package compare

@@ -29,6 +29,7 @@ import (
 	"github.com/mycophonic/primordium/app"
 
 	"github.com/mycophonic/sporeprint/chromaprint"
+	"github.com/mycophonic/sporeprint/compare"
 	"github.com/mycophonic/sporeprint/version"
 )
 
@@ -38,11 +39,19 @@ const (
 	channels        = 1
 	defaultDuration = 120
 	bufferSize      = 8192
+
+	// defaultThreshold is the minimum similarity score to consider two
+	// fingerprints a match. Matches AcoustID's TRACK_GROUP_MERGE_THRESHOLD.
+	// Reference: https://github.com/acoustid/acoustid-server
+	defaultThreshold = 0.4
 )
 
 var (
 	ErrChromaprintFailure = errors.New("chromaprint error")
+	ErrCompareFailure     = errors.New("compare error")
+	ErrInvalidArgs        = errors.New("invalid arguments")
 	ErrReadFailure        = errors.New("read error")
+	ErrNoMatch            = errors.New("no match")
 )
 
 func main() {
@@ -51,34 +60,82 @@ func main() {
 
 	appl := &cli.Command{
 		Name:    version.Name(),
-		Usage:   "Generate audio fingerprints from raw PCM via stdin",
+		Usage:   "Audio fingerprinting toolkit",
 		Version: version.Version() + " (" + version.Commit() + " - " + version.Date() + " - chromaprint " + chromaprint.Version() + ")",
-		Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
+		Commands: []*cli.Command{
+			{
+				Name:  "fingerprint",
+				Usage: "Generate a Chromaprint fingerprint from raw PCM via stdin",
+				Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
 
 Chromaprint expects 11025 Hz mono input s16le. Example:
 
-  ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint
+  ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint fingerprint
 
 The aresample filter parameters ensure identical output to fpcalc.`,
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:    "length",
-				Aliases: []string{"l"},
-				Value:   defaultDuration,
-				Usage:   "max audio length in seconds (0 = unlimited)",
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:    "length",
+						Aliases: []string{"l"},
+						Value:   defaultDuration,
+						Usage:   "max audio length in seconds (0 = unlimited)",
+					},
+				},
+				Action: runFingerprint,
+			},
+			{
+				Name:      "compare",
+				Usage:     "Compare two encoded Chromaprint fingerprints",
+				ArgsUsage: "FINGERPRINT1 FINGERPRINT2",
+				Flags: []cli.Flag{
+					&cli.FloatFlag{
+						Name:    "threshold",
+						Aliases: []string{"t"},
+						Value:   defaultThreshold,
+						Usage:   "minimum similarity score to consider a match (0.0-1.0)",
+					},
+				},
+				Action: runCompare,
 			},
 		},
-		Action: run,
 	}
 
 	if err := appl.Run(ctx, os.Args); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		if !errors.Is(err, ErrNoMatch) {
+			_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
 
 		os.Exit(1)
 	}
 }
 
-func run(_ context.Context, cliCom *cli.Command) error {
+func runCompare(_ context.Context, cliCom *cli.Command) error {
+	args := cliCom.Args()
+	if args.Len() != 2 { //nolint:mnd
+		return fmt.Errorf("%w: expected exactly 2 fingerprints, got %d", ErrInvalidArgs, args.Len())
+	}
+
+	fp1 := args.Get(0)
+	fp2 := args.Get(1)
+	threshold := cliCom.Float("threshold")
+
+	score, err := compare.Compare(fp1, fp2)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrCompareFailure, err)
+	}
+
+	if score >= threshold {
+		_, _ = fmt.Fprintf(os.Stdout, "score=%.3f match (threshold=%.2f)\n", score, threshold)
+
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(os.Stdout, "score=%.3f no match (threshold=%.2f)\n", score, threshold)
+
+	return ErrNoMatch
+}
+
+func runFingerprint(_ context.Context, cliCom *cli.Command) error {
 	length := cliCom.Int("length")
 
 	chroma := chromaprint.New()
@@ -141,7 +198,7 @@ func run(_ context.Context, cliCom *cli.Command) error {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}
 
-	_, fingerprint, err := chroma.Fingerprint()
+	fingerprint, err := chroma.Fingerprint()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}

@@ -15,6 +15,7 @@
 CGO_ENABLED := 1
 NAME := sporeprint
 GOFLAGS := -tags=cgo,netgo,osusergo,static_build
+COVER_MIN := 35
 
 include hack/common.mk
 

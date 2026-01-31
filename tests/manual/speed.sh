@@ -31,7 +31,7 @@ process_fpcalc() {
 
 process_sporeprint() {
   ffmpeg -nostdin -i "$1" -f s16le -ar 11025 -ac 1 pipe:1 2>/dev/null |
-    ./bin/sporeprint >/dev/null
+    ./bin/sporeprint fingerprint >/dev/null
 }
 
 export -f process_fpcalc process_sporeprint
