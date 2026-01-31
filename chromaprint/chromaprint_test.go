@@ -68,7 +68,7 @@ func TestErrFreedAfterFree(t *testing.T) {
 	t.Run("Fingerprint", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := ctx.Fingerprint()
+		_, _, err := ctx.Fingerprint()
 		if !errors.Is(err, chromaprint.ErrFreed) {
 			t.Errorf("Fingerprint() after Free() = %v, want ErrFreed", err)
 		}
@@ -123,7 +123,7 @@ func TestBasicFingerprint(t *testing.T) {
 		t.Fatalf("Finish() failed: %v", err)
 	}
 
-	fingerprint, err := ctx.Fingerprint()
+	_, fingerprint, err := ctx.Fingerprint()
 	if err != nil {
 		t.Fatalf("Fingerprint() failed: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestFingerprintDeterministic(t *testing.T) {
 			t.Fatalf("Finish() failed: %v", err)
 		}
 
-		fp, err := ctx.Fingerprint()
+		_, fp, err := ctx.Fingerprint()
 		if err != nil {
 			t.Fatalf("Fingerprint() failed: %v", err)
 		}
@@ -208,7 +208,7 @@ func TestMultipleFeeds(t *testing.T) {
 		t.Fatalf("Finish() failed: %v", err)
 	}
 
-	fingerprint, err := ctx.Fingerprint()
+	_, fingerprint, err := ctx.Fingerprint()
 	if err != nil {
 		t.Fatalf("Fingerprint() failed: %v", err)
 	}
