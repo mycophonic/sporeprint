@@ -93,4 +93,4 @@ Or just shell out to the provided binary.
 ## More
 
 * [QA](docs/QA.md)
-* [RESEARCH](docs/research/FINGERPRINTING_SOLUTIONS)
+* [RESEARCH](docs/research/FINGERPRINTING_SOLUTIONS.md)
