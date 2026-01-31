@@ -28,9 +28,15 @@ endif
 # Configurable defaults (override in project Makefile before include)
 ICON ?= "🧿"
 ORG ?= github.com/mycophonic
-LINT_GO ?= true
 ALLOWED_LICENSES ?= Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT
 LICENSE_IGNORES ?=
+
+# Auto-detect Go module presence.
+ifneq ($(wildcard $(PROJECT_DIR)/go.mod),)
+  HAS_GO := true
+else
+  HAS_GO := false
+endif
 
 # Helpers
 recursive_wildcard=$(wildcard $1$2) $(foreach e,$(wildcard $1*),$(call recursive_wildcard,$e/,$2))
@@ -52,17 +58,28 @@ help:
 	$(call footer, $@)
 
 # Tasks
-ifeq ($(LINT_GO),true)
+ifeq ($(HAS_GO),true)
 lint: lint-go lint-commits lint-mod lint-licenses-all lint-headers lint-yaml lint-shell lint-go-all
 else
 lint: lint-commits lint-headers lint-yaml lint-shell
 endif
 
+ifeq ($(HAS_GO),true)
 fix: fix-go-all fix-mod ## Automatically fix some issues
+else
+fix: ## Automatically fix some issues
+	@echo "No Go code detected, skipping Go fixes"
+endif
 
+ifeq ($(HAS_GO),true)
 test: unit ## Run all tests
-
 unit: test-unit test-unit-race test-unit-bench ## Run unit tests
+else
+test: ## Run all tests
+	@echo "No Go code detected, skipping tests"
+unit: ## Run unit tests
+	@echo "No Go code detected, skipping tests"
+endif
 
 ##########################
 # Linting tasks
@@ -110,7 +127,7 @@ lint-commits:
 lint-headers:
 	$(call title, $@)
 	@cd $(PROJECT_DIR) \
-		&& ltag -t "./hack/headers" --check -v
+		&& ltag -t "./hack/headers" --excludes "bin" --check -v
 	$(call footer, $@)
 
 lint-mod:
@@ -250,9 +267,21 @@ test-unit-bench:
 	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/... -bench=.
 	$(call footer, $@)
 
+# Force external linking for race tests. The race detector injects runtime/cgo
+# into every package, including those without "import C". CGO_CFLAGS hardening
+# flags (-fstack-protector-strong, -fPIE) cause GCC to emit object code
+# referencing libc symbols (stderr, etc.). For packages without direct CGO, Go
+# uses its internal linker which cannot resolve libc symbols, failing on Linux
+# with: runtime/cgo(.text): relocation target stderr not defined
+# Forcing -linkmode=external makes GCC perform the final link, resolving libc.
+#
+# See:
+#   https://github.com/golang/go/issues/52690
+#   https://github.com/golang/go/issues/54313
+#   https://github.com/golang/go/issues/58619
 test-unit-race:
 	$(call title, $@)
-	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) $(PROJECT_DIR)/... -race
+	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" $(PROJECT_DIR)/... -race
 	$(call footer, $@)
 
 PROF_DIR := $(PROJECT_DIR)/bin/profiles

@@ -92,11 +92,8 @@ jobs:
       - name: Build Chromaprint
         run: make chromaprint
 
-      - name: Run unit tests
-        run: make test-unit
-
-      - name: Run race detector tests
-        run: make test-unit-race
+      - name: Run tests
+        run: make test
 
   test-success:
     name: Test

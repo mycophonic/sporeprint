@@ -3,8 +3,8 @@ module github.com/mycophonic/sporeprint
 go 1.25.6
 
 require (
-	github.com/containerd/nerdctl/mod/tigron v0.0.0-20260121031139-a630881afd01
-	github.com/mycophonic/agar v0.0.0-00010101000000-000000000000
+	github.com/containerd/nerdctl/mod/tigron v0.0.0-20260131022912-007be9cd3a56
+	github.com/mycophonic/agar v0.1.0
 	github.com/mycophonic/primordium v0.0.0-20260131012359-6fb57c904cec
 	github.com/urfave/cli/v3 v3.6.2
 )
