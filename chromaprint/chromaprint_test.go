@@ -1,3 +1,19 @@
+/*
+   Copyright Mycophonic.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package chromaprint_test
 
 import (
@@ -68,7 +84,7 @@ func TestErrFreedAfterFree(t *testing.T) {
 	t.Run("Fingerprint", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := ctx.Fingerprint()
+		_, _, err := ctx.Fingerprint()
 		if !errors.Is(err, chromaprint.ErrFreed) {
 			t.Errorf("Fingerprint() after Free() = %v, want ErrFreed", err)
 		}
@@ -123,7 +139,7 @@ func TestBasicFingerprint(t *testing.T) {
 		t.Fatalf("Finish() failed: %v", err)
 	}
 
-	fingerprint, err := ctx.Fingerprint()
+	_, fingerprint, err := ctx.Fingerprint()
 	if err != nil {
 		t.Fatalf("Fingerprint() failed: %v", err)
 	}
@@ -166,7 +182,7 @@ func TestFingerprintDeterministic(t *testing.T) {
 			t.Fatalf("Finish() failed: %v", err)
 		}
 
-		fp, err := ctx.Fingerprint()
+		_, fp, err := ctx.Fingerprint()
 		if err != nil {
 			t.Fatalf("Fingerprint() failed: %v", err)
 		}
@@ -208,7 +224,7 @@ func TestMultipleFeeds(t *testing.T) {
 		t.Fatalf("Finish() failed: %v", err)
 	}
 
-	fingerprint, err := ctx.Fingerprint()
+	_, fingerprint, err := ctx.Fingerprint()
 	if err != nil {
 		t.Fatalf("Fingerprint() failed: %v", err)
 	}

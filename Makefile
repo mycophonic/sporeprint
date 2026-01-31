@@ -1,3 +1,17 @@
+#   Copyright Mycophonic.
+
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+
+#       http://www.apache.org/licenses/LICENSE-2.0
+
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
 CGO_ENABLED := 1
 NAME := sporeprint
 GOFLAGS := -tags=cgo,netgo,osusergo,static_build
@@ -23,9 +37,10 @@ chromaprint: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ## Build Chromaprint stati
 $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 	@echo "=== Fetching Chromaprint $(CHROMAPRINT_VERSION) ==="
 	@rm -rf $(CHROMAPRINT_BUILD_DIR)
-	@mkdir -p $(CHROMAPRINT_BUILD_DIR) bin
-	@curl -fsSL "https://github.com/acoustid/chromaprint/releases/download/v$(CHROMAPRINT_VERSION)/chromaprint-$(CHROMAPRINT_VERSION).tar.gz" \
-		| tar xz -C $(CHROMAPRINT_BUILD_DIR)
+	@mkdir -p bin
+	@git clone --branch v$(CHROMAPRINT_VERSION) --depth 1 \
+		https://github.com/acoustid/chromaprint.git \
+		$(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)
 	@echo "=== Building Chromaprint (static, KissFFT) ==="
 	@cd $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION) && \
 		mkdir -p build && \

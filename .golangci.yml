@@ -157,9 +157,12 @@ linters:
 
   exclusions:
     rules:
-      - path: testutil/
+      - path: testutils/
         linters:
           - gosec
+          - noctx
+          - varnamelen
+          - depguard
       # CGO files produce false positives for these linters
       - path: chromaprint\.go
         linters:

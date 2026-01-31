@@ -1,3 +1,19 @@
+/*
+   Copyright Mycophonic.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package chromaprint
 
 /*
@@ -87,20 +103,37 @@ func (c *Context) Finish() error {
 	return nil
 }
 
-// Fingerprint returns the calculated fingerprint as a compressed base64 string.
-func (c *Context) Fingerprint() (string, error) {
+// Fingerprint returns the calculated fingerprint as both a raw subfingerprint
+// array and a compressed base64-encoded string.
+func (c *Context) Fingerprint() ([]uint32, string, error) {
 	if c.ctx == nil {
-		return "", ErrFreed
+		return nil, "", ErrFreed
 	}
 
-	var pointer *C.char
-	if C.chromaprint_get_fingerprint(c.ctx, &pointer) != 1 {
-		return "", ErrFingerprint
+	// Get raw fingerprint (uint32 subfingerprints).
+	var rawPtr *C.uint32_t
+	var rawSize C.int
+
+	if C.chromaprint_get_raw_fingerprint(c.ctx, &rawPtr, &rawSize) != 1 {
+		return nil, "", ErrFingerprint
 	}
 
-	defer C.chromaprint_dealloc(unsafe.Pointer(pointer))
+	raw := make([]uint32, int(rawSize))
+	copy(raw, unsafe.Slice((*uint32)(unsafe.Pointer(rawPtr)), int(rawSize)))
 
-	return C.GoString(pointer), nil
+	C.chromaprint_dealloc(unsafe.Pointer(rawPtr))
+
+	// Get compressed fingerprint (base64 string).
+	var encoded *C.char
+	if C.chromaprint_get_fingerprint(c.ctx, &encoded) != 1 {
+		return nil, "", ErrFingerprint
+	}
+
+	fp := C.GoString(encoded)
+
+	C.chromaprint_dealloc(unsafe.Pointer(encoded))
+
+	return raw, fp, nil
 }
 
 // Version returns the Chromaprint library version string.

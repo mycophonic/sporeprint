@@ -10,6 +10,7 @@ COMMIT ?= $(shell git -C $(PROJECT_DIR) rev-parse HEAD 2>/dev/null || echo "no_g
 	if ! git -C $(PROJECT_DIR) diff-index --quiet HEAD 2>/dev/null; then echo .m; fi)
 LINT_COMMIT_RANGE ?= main..HEAD
 DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 
 ifdef VERBOSE
 	VERBOSE_FLAG := -v
@@ -27,9 +28,15 @@ endif
 # Configurable defaults (override in project Makefile before include)
 ICON ?= "🧿"
 ORG ?= github.com/mycophonic
-LINT_GO ?= true
 ALLOWED_LICENSES ?= Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT
 LICENSE_IGNORES ?=
+
+# Auto-detect Go module presence.
+ifneq ($(wildcard $(PROJECT_DIR)/go.mod),)
+  HAS_GO := true
+else
+  HAS_GO := false
+endif
 
 # Helpers
 recursive_wildcard=$(wildcard $1$2) $(foreach e,$(wildcard $1*),$(call recursive_wildcard,$e/,$2))
@@ -51,17 +58,28 @@ help:
 	$(call footer, $@)
 
 # Tasks
-ifeq ($(LINT_GO),true)
+ifeq ($(HAS_GO),true)
 lint: lint-go lint-commits lint-mod lint-licenses-all lint-headers lint-yaml lint-shell lint-go-all
 else
 lint: lint-commits lint-headers lint-yaml lint-shell
 endif
 
+ifeq ($(HAS_GO),true)
 fix: fix-go-all fix-mod ## Automatically fix some issues
+else
+fix: ## Automatically fix some issues
+	@echo "No Go code detected, skipping Go fixes"
+endif
 
+ifeq ($(HAS_GO),true)
 test: unit ## Run all tests
-
 unit: test-unit test-unit-race test-unit-bench ## Run unit tests
+else
+test: ## Run all tests
+	@echo "No Go code detected, skipping tests"
+unit: ## Run unit tests
+	@echo "No Go code detected, skipping tests"
+endif
 
 ##########################
 # Linting tasks
@@ -109,7 +127,7 @@ lint-commits:
 lint-headers:
 	$(call title, $@)
 	@cd $(PROJECT_DIR) \
-		&& ltag -t "./hack/headers" --check -v
+		&& ltag -t "./hack/headers" --excludes "bin" --check -v
 	$(call footer, $@)
 
 lint-mod:
@@ -169,6 +187,41 @@ up:
 	$(call footer, $@)
 
 ##########################
+# Developer environment setup
+##########################
+# init-dev-system installs platform-specific system dependencies.
+# Requires: Homebrew (macOS), apt (Linux), or Chocolatey (Windows).
+ifeq ($(OS),Windows_NT)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (Windows/Chocolatey)..."
+	@choco install golang make shellcheck -y
+	@pip install yamllint
+	$(call footer, $@)
+else ifeq ($(UNAME_S),Darwin)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (macOS/Homebrew)..."
+	@brew install golang make yamllint shellcheck
+	$(call footer, $@)
+else ifeq ($(UNAME_S),Linux)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (Linux/apt)..."
+	@sudo apt-get update -qq
+	@sudo apt-get install -qq --no-install-recommends golang make yamllint shellcheck
+	$(call footer, $@)
+else
+init-dev-system:
+	$(call title, $@)
+	@echo "Unsupported platform: $(UNAME_S)"
+	@echo "Please install manually: golang, make, yamllint, shellcheck"
+	@exit 1
+endif
+
+init-dev: init-dev-system install-dev-tools ## Set up complete development environment
+
+##########################
 # Development tools installation
 ##########################
 # Dev tool installs must clear project CGO flags — these tools are unrelated
@@ -214,9 +267,21 @@ test-unit-bench:
 	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/... -bench=.
 	$(call footer, $@)
 
+# Force external linking for race tests. The race detector injects runtime/cgo
+# into every package, including those without "import C". CGO_CFLAGS hardening
+# flags (-fstack-protector-strong, -fPIE) cause GCC to emit object code
+# referencing libc symbols (stderr, etc.). For packages without direct CGO, Go
+# uses its internal linker which cannot resolve libc symbols, failing on Linux
+# with: runtime/cgo(.text): relocation target stderr not defined
+# Forcing -linkmode=external makes GCC perform the final link, resolving libc.
+#
+# See:
+#   https://github.com/golang/go/issues/52690
+#   https://github.com/golang/go/issues/54313
+#   https://github.com/golang/go/issues/58619
 test-unit-race:
 	$(call title, $@)
-	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) $(PROJECT_DIR)/... -race
+	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" $(PROJECT_DIR)/... -race
 	$(call footer, $@)
 
 PROF_DIR := $(PROJECT_DIR)/bin/profiles
@@ -259,6 +324,7 @@ test-unit-profile: ## Run tests with CPU and memory profiling
 	test \
 	up \
 	unit \
+	init-dev init-dev-system \
 	install-dev-tools install-dev-gotestsum \
 	lint-commits lint-go lint-go-all lint-headers lint-licenses lint-licenses-all lint-mod lint-shell lint-yaml \
 	fix-go fix-go-all fix-mod \
@@ -306,8 +372,6 @@ GCFLAGS_DEBUG := all=-N -l
 #   https://www.gnu.org/software/libc/manual/html_node/Source-Fortification.html
 #   https://news.ycombinator.com/item?id=18874113
 #   https://github.com/golang/go/issues/26849
-
-UNAME_S := $(shell uname -s)
 
 # Windows detection: the OS environment variable is set to "Windows_NT" on all
 # modern Windows versions (cmd, PowerShell, Git Bash, MSYS2). Unlike uname,
