@@ -22,6 +22,10 @@ possible to integrate as a library without having to shell out.
 
 TL;DR sporeprint is "fpcalc-light" for the go world, without license minefield or dynamic linkage fuckery.
 
+## Supported platforms
+
+maOS. Linux. Windows.
+
 ## Trade-offs
 
 ### Sporeprint does not convert the audio data on its own...

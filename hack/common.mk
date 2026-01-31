@@ -10,6 +10,7 @@ COMMIT ?= $(shell git -C $(PROJECT_DIR) rev-parse HEAD 2>/dev/null || echo "no_g
 	if ! git -C $(PROJECT_DIR) diff-index --quiet HEAD 2>/dev/null; then echo .m; fi)
 LINT_COMMIT_RANGE ?= main..HEAD
 DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 
 ifdef VERBOSE
 	VERBOSE_FLAG := -v
@@ -169,6 +170,41 @@ up:
 	$(call footer, $@)
 
 ##########################
+# Developer environment setup
+##########################
+# init-dev-system installs platform-specific system dependencies.
+# Requires: Homebrew (macOS), apt (Linux), or Chocolatey (Windows).
+ifeq ($(OS),Windows_NT)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (Windows/Chocolatey)..."
+	@choco install golang make shellcheck -y
+	@pip install yamllint
+	$(call footer, $@)
+else ifeq ($(UNAME_S),Darwin)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (macOS/Homebrew)..."
+	@brew install golang make yamllint shellcheck
+	$(call footer, $@)
+else ifeq ($(UNAME_S),Linux)
+init-dev-system:
+	$(call title, $@)
+	@echo "Installing system dependencies (Linux/apt)..."
+	@sudo apt-get update -qq
+	@sudo apt-get install -qq --no-install-recommends golang make yamllint shellcheck
+	$(call footer, $@)
+else
+init-dev-system:
+	$(call title, $@)
+	@echo "Unsupported platform: $(UNAME_S)"
+	@echo "Please install manually: golang, make, yamllint, shellcheck"
+	@exit 1
+endif
+
+init-dev: init-dev-system install-dev-tools ## Set up complete development environment
+
+##########################
 # Development tools installation
 ##########################
 # Dev tool installs must clear project CGO flags — these tools are unrelated
@@ -259,6 +295,7 @@ test-unit-profile: ## Run tests with CPU and memory profiling
 	test \
 	up \
 	unit \
+	init-dev init-dev-system \
 	install-dev-tools install-dev-gotestsum \
 	lint-commits lint-go lint-go-all lint-headers lint-licenses lint-licenses-all lint-mod lint-shell lint-yaml \
 	fix-go fix-go-all fix-mod \
@@ -306,8 +343,6 @@ GCFLAGS_DEBUG := all=-N -l
 #   https://www.gnu.org/software/libc/manual/html_node/Source-Fortification.html
 #   https://news.ycombinator.com/item?id=18874113
 #   https://github.com/golang/go/issues/26849
-
-UNAME_S := $(shell uname -s)
 
 # Windows detection: the OS environment variable is set to "Windows_NT" on all
 # modern Windows versions (cmd, PowerShell, Git Bash, MSYS2). Unlike uname,

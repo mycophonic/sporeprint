@@ -1,2 +1,2 @@
-// Package version simply exposes product name and version, meant to be overwritten at build time.
+// Package version exposes build-time version metadata set via ldflags.
 package version

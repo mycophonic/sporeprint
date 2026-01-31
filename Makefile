@@ -23,9 +23,10 @@ chromaprint: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ## Build Chromaprint stati
 $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 	@echo "=== Fetching Chromaprint $(CHROMAPRINT_VERSION) ==="
 	@rm -rf $(CHROMAPRINT_BUILD_DIR)
-	@mkdir -p $(CHROMAPRINT_BUILD_DIR) bin
-	@curl -fsSL "https://github.com/acoustid/chromaprint/releases/download/v$(CHROMAPRINT_VERSION)/chromaprint-$(CHROMAPRINT_VERSION).tar.gz" \
-		| tar xz -C $(CHROMAPRINT_BUILD_DIR)
+	@mkdir -p bin
+	@git clone --branch v$(CHROMAPRINT_VERSION) --depth 1 \
+		https://github.com/acoustid/chromaprint.git \
+		$(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)
 	@echo "=== Building Chromaprint (static, KissFFT) ==="
 	@cd $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION) && \
 		mkdir -p build && \
