@@ -9,7 +9,7 @@ include hack/common.mk
 ##########################
 
 CHROMAPRINT_VERSION := 1.6.0
-CHROMAPRINT_BUILD_DIR := tmp/chromaprint
+CHROMAPRINT_BUILD_DIR := bin/tmp/chromaprint
 CHROMAPRINT_LIB := bin/libchromaprint.a
 CHROMAPRINT_HEADER := bin/chromaprint.h
 
@@ -31,6 +31,7 @@ $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 		mkdir -p build && \
 		cd build && \
 		cmake .. \
+			$(CMAKE_GENERATOR) \
 			-DCMAKE_BUILD_TYPE=Release \
 			-DCMAKE_C_FLAGS="$(C_CFLAGS_RELEASE)" \
 			-DCMAKE_CXX_FLAGS="$(C_CXXFLAGS_RELEASE)" \
