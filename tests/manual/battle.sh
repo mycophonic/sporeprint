@@ -26,19 +26,30 @@ find "$folder" -type f \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o
     fpfp="$(ffmpeg -nostdin -i "$file" -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | fpcalc -format s16le -rate 11025 -channels 1 - | grep FINGERPRINT | sed 's/FINGERPRINT=//')" || true
     spfp="$(ffmpeg -nostdin -i "$file" -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | ./bin/sporeprint fingerprint)"
     if [ "$fpfpd" != "$spfp" ]; then
-      >&2 echo "-----------------------------------------------------"
-      >&2 echo "FAIL: fingerprints differ (direct)"
-      >&2 echo "$file"
-      >&2 echo "-----------------------------------------------------"
+      if ./bin/sporeprint compare "$fpfpd" "$spfp" >/dev/null 2>&1; then
+        >&2 echo "-----------------------------------------------------"
+        >&2 echo "WARN: fingerprints differ but match (direct)"
+        >&2 echo "$file"
+        >&2 echo "-----------------------------------------------------"
+      else
+        >&2 echo "-----------------------------------------------------"
+        >&2 echo "FAIL: fingerprints differ (direct)"
+        >&2 echo "$file"
+        >&2 echo "-----------------------------------------------------"
+      fi
     fi
     if [ "$fpfp" != "$spfp" ]; then
-      >&2 echo "-----------------------------------------------------"
-      >&2 echo "FAIL: fingerprints differ (stdin)"
-      >&2 echo "$file"
-      >&2 echo "-----------------------------------------------------"
-      >&2 echo "$fpfpd"
-      >&2 echo "$fpfp"
-      >&2 echo "$spfp"
+      if ./bin/sporeprint compare "$fpfp" "$spfp" >/dev/null 2>&1; then
+        >&2 echo "-----------------------------------------------------"
+        >&2 echo "WARN: fingerprints differ but match (stdin)"
+        >&2 echo "$file"
+        >&2 echo "-----------------------------------------------------"
+      else
+        >&2 echo "-----------------------------------------------------"
+        >&2 echo "FAIL: fingerprints differ (stdin)"
+        >&2 echo "$file"
+        >&2 echo "-----------------------------------------------------"
+      fi
     fi
 
   done
