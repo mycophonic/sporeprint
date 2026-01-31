@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/farcloser/sporeprint/chromaprint"
+	"github.com/mycophonic/sporeprint/chromaprint"
 )
 
 func TestVersion(t *testing.T) {

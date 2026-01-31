@@ -1,14 +1,13 @@
-module github.com/farcloser/sporeprint
+module github.com/mycophonic/sporeprint
 
 go 1.25.6
 
 require (
-	github.com/farcloser/primordium v0.0.0-20260124095306-e29c5b2a0db1
+	github.com/mycophonic/primordium v0.0.0-20260131012359-6fb57c904cec
 	github.com/urfave/cli/v3 v3.6.2
 )
 
 require (
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect

@@ -1,6 +1,6 @@
 # Sporeprint
 
-> * an audio fingerprinting cli tool and cgo library binding Chromaprint
+> * audio fingerprinting cli tool and CGO library binding Chromaprint
 > * [the powdery deposit obtained by allowing spores of a fungal fruit body to fall onto a surface underneath](https://en.wikipedia.org/wiki/Spore_print)
 
 ![Sporeprint](logo.png)
@@ -88,5 +88,5 @@ Or just shell out to the provided binary.
 
 ## More
 
-* [COMPAT](docs/COMPAT.md)
-* [LANDSCAPE](docs/LANDSCAPE.md).
+* [QA](docs/QA.md)
+* [RESEARCH](docs/research/FINGERPRINTING_SOLUTIONS)

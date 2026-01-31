@@ -10,10 +10,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/farcloser/primordium/app"
+	"github.com/mycophonic/primordium/app"
 
-	"github.com/farcloser/sporeprint/chromaprint"
-	"github.com/farcloser/sporeprint/version"
+	"github.com/mycophonic/sporeprint/chromaprint"
+	"github.com/mycophonic/sporeprint/version"
 )
 
 // See README.
@@ -36,7 +36,7 @@ func main() {
 	appl := &cli.Command{
 		Name:    version.Name(),
 		Usage:   "Generate audio fingerprints from raw PCM via stdin",
-		Version: version.Version() + " (" + version.Commit() + " - " + version.Date() + ")",
+		Version: version.Version() + " (" + version.Commit() + " - " + version.Date() + " - chromaprint " + chromaprint.Version() + ")",
 		Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
 
 Chromaprint expects 11025 Hz mono input s16le. Example:
@@ -51,11 +51,6 @@ The aresample filter parameters ensure identical output to fpcalc.`,
 				Value:   defaultDuration,
 				Usage:   "max audio length in seconds (0 = unlimited)",
 			},
-			&cli.BoolFlag{
-				Name:    "version",
-				Aliases: []string{"v"},
-				Usage:   "print version and exit",
-			},
 		},
 		Action: run,
 	}
@@ -68,12 +63,6 @@ The aresample filter parameters ensure identical output to fpcalc.`,
 }
 
 func run(_ context.Context, cliCom *cli.Command) error {
-	if cliCom.Bool("version") {
-		_, _ = fmt.Fprintf(os.Stderr, "sporeprint using chromaprint %s\n", chromaprint.Version())
-
-		return nil
-	}
-
 	length := cliCom.Int("length")
 
 	chroma := chromaprint.New()
@@ -111,10 +100,6 @@ func run(_ context.Context, cliCom *cli.Command) error {
 			//nolint:gosec // samples size = 1/2 buffer size
 			samples[i/2] = int16(binary.LittleEndian.Uint16(buf[i : i+2]))
 		}
-		// numSamples := nread / 2
-		// for i := range numSamples {
-		//	samples[i] = int16(byteOrder.Uint16(buf[i*2:]))
-		// }
 
 		// Apply length limit
 		toFeed := numSamples
