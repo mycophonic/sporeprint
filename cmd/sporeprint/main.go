@@ -141,7 +141,7 @@ func run(_ context.Context, cliCom *cli.Command) error {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}
 
-	_, fingerprint, err := chroma.Fingerprint()
+	fingerprint, err := chroma.Fingerprint()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}
