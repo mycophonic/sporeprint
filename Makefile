@@ -40,7 +40,7 @@ $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER):
 			-DBUILD_TOOLS=OFF \
 			-DBUILD_TESTS=OFF \
 			-DFFT_LIB=kissfft && \
-		$(MAKE)
+		cmake --build . --config Release
 	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/build/src/libchromaprint.a bin/
 	@cp $(CHROMAPRINT_BUILD_DIR)/chromaprint-$(CHROMAPRINT_VERSION)/src/chromaprint.h bin/
 	@echo "=== Chromaprint built: $(CHROMAPRINT_LIB) $(CHROMAPRINT_HEADER) ==="
