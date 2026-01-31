@@ -49,7 +49,7 @@ Finally, fpcalc itself is adding some extra filtering into the mix (cutoff 0.8).
 To obtain the same fingerprints with sporeprint, you thus need the following ffmpeg invocation:
 
 ```bash
-ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint
+ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint fingerprint
 ```
 
 fpcalc will yield the same results (but see below):

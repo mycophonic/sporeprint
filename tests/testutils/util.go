@@ -176,7 +176,7 @@ func SporeprintFingerprint(t tig.T, pcmPath string) string {
 
 	defer f.Close()
 
-	cmd := exec.Command(bin, "-l", "0")
+	cmd := exec.Command(bin, "fingerprint", "-l", "0")
 	cmd.Stdin = f
 
 	out, err := cmd.Output()
