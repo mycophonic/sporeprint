@@ -24,12 +24,12 @@ import (
 
 	"github.com/mycophonic/agar/pkg/agar"
 
-	"github.com/mycophonic/sporeprint/tests/testutils"
+	"github.com/mycophonic/sporeprint/tests/testutil"
 )
 
 //nolint:paralleltest
 func TestFingerprintMatchesFpcalc(t *testing.T) {
-	testCase := testutils.Setup()
+	testCase := testutil.Setup()
 
 	testCase.SubTests = []*test.Case{
 		fingerprintSubtest("FLAC 16-bit 44.1kHz stereo", agar.Genuine16bit44k),
@@ -47,7 +47,64 @@ func TestFingerprintMatchesFpcalc(t *testing.T) {
 	testCase.Run(t)
 }
 
+// TestFingerprintWithInternalResample verifies that sporeprint produces identical
+// fingerprints when resampling internally (--rate/--channels flags) vs fpcalc.
+// ffmpeg is only used for decoding (no aresample filter).
+//
+//nolint:paralleltest
+func TestFingerprintWithInternalResample(t *testing.T) {
+	testCase := testutil.Setup()
+
+	testCase.SubTests = []*test.Case{
+		resampleSubtest("44.1kHz stereo s16le", agar.Genuine16bit44k, "44100", "2", "s16le"),
+		resampleSubtest("96kHz stereo s32le", agar.Genuine24bit96k, "96000", "2", "s32le"),
+		resampleSubtest("48kHz stereo s32le", agar.Genuine24bit48k, "48000", "2", "s32le"),
+		resampleSubtest("44.1kHz mono s16le", agar.GenuineMono16bit44k, "44100", "1", "s16le"),
+	}
+
+	testCase.Run(t)
+}
+
 type audioGenerator func(test.Data, test.Helpers) string
+
+func resampleSubtest(description string, gen audioGenerator, rate, channels, format string) *test.Case {
+	return &test.Case{
+		Description: description,
+		Setup: func(data test.Data, helpers test.Helpers) {
+			// Generate audio file.
+			audioFile := gen(data, helpers)
+			data.Labels().Set("audio", audioFile)
+
+			// Decode to raw PCM at native rate (no resampling).
+			pcmFile := filepath.Join(data.Temp().Dir(), "decoded.pcm")
+			testutil.DecodePCM(helpers, audioFile, pcmFile, rate, channels, format)
+			data.Labels().Set("pcm", pcmFile)
+
+			// Reference: fpcalc directly on the original file.
+			data.Labels().Set("fp-ref", testutil.FpcalcFingerprint(helpers.T(), audioFile))
+		},
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			pcmFile := data.Labels().Get("pcm")
+
+			// sporeprint with internal resampling.
+			fpSporeprint := testutil.SporeprintFingerprintWithResample(
+				helpers.T(), pcmFile, rate, channels, format,
+			)
+
+			fpRef := data.Labels().Get("fp-ref")
+
+			if fpRef != fpSporeprint {
+				helpers.T().Log("fpcalc vs sporeprint (internal resample): MISMATCH")
+				helpers.T().Log("  fpcalc:     " + fpRef)
+				helpers.T().Log("  sporeprint: " + fpSporeprint)
+				helpers.T().Fail()
+			}
+
+			return helpers.Custom("true")
+		},
+		Expected: test.Expects(0, nil, nil),
+	}
+}
 
 func fingerprintSubtest(description string, gen audioGenerator) *test.Case {
 	return &test.Case{
@@ -59,20 +116,20 @@ func fingerprintSubtest(description string, gen audioGenerator) *test.Case {
 
 			// Preprocess to chromaprint-compatible PCM.
 			pcmFile := filepath.Join(data.Temp().Dir(), "preprocessed.pcm")
-			testutils.PreprocessPCM(helpers, audioFile, pcmFile)
+			testutil.PreprocessPCM(helpers, audioFile, pcmFile)
 			data.Labels().Set("pcm", pcmFile)
 
 			// 1. fpcalc direct on the original audio file.
-			data.Labels().Set("fp-direct", testutils.FpcalcFingerprint(helpers.T(), audioFile))
+			data.Labels().Set("fp-direct", testutil.FpcalcFingerprint(helpers.T(), audioFile))
 
 			// 2. fpcalc on the preprocessed PCM.
-			data.Labels().Set("fp-pcm", testutils.FpcalcFingerprintPCM(helpers.T(), pcmFile))
+			data.Labels().Set("fp-pcm", testutil.FpcalcFingerprintPCM(helpers.T(), pcmFile))
 		},
 		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
 			pcmFile := data.Labels().Get("pcm")
 
 			// 3. sporeprint on the preprocessed PCM via stdin.
-			fpSporeprint := testutils.SporeprintFingerprint(helpers.T(), pcmFile)
+			fpSporeprint := testutil.SporeprintFingerprint(helpers.T(), pcmFile)
 
 			fpDirect := data.Labels().Get("fp-direct")
 			fpPCM := data.Labels().Get("fp-pcm")

@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -30,13 +29,13 @@ import (
 
 	"github.com/mycophonic/sporeprint/chromaprint"
 	"github.com/mycophonic/sporeprint/compare"
+	"github.com/mycophonic/sporeprint/resample"
 	"github.com/mycophonic/sporeprint/version"
 )
 
 // See README.
 const (
-	sampleRate      = 11025
-	channels        = 1
+	targetRate      = 11025
 	defaultDuration = 120
 	bufferSize      = 8192
 
@@ -66,19 +65,38 @@ func main() {
 			{
 				Name:  "fingerprint",
 				Usage: "Generate a Chromaprint fingerprint from raw PCM via stdin",
-				Description: `Reads signed 16-bit PCM audio from stdin and outputs a Chromaprint fingerprint.
+				Description: `Reads raw PCM audio from stdin, resamples to 11025 Hz mono, and outputs a Chromaprint fingerprint.
 
-Chromaprint expects 11025 Hz mono input s16le. Example:
+Examples:
+  # Let sporeprint handle resampling (recommended):
+  ffmpeg -i track.flac -f s16le -ac 2 -ar 44100 pipe:1 | sporeprint fingerprint -r 44100 -c 2
 
-  ffmpeg -i track.flac -af "aresample=resampler=swr:filter_size=16:phase_shift=8:cutoff=0.8:linear_interp=1" -f s16le -ac 1 -ar 11025 pipe:1 2>/dev/null | sporeprint fingerprint
-
-The aresample filter parameters ensure identical output to fpcalc.`,
+  # Pre-resampled input (default flags):
+  ffmpeg -i track.flac -f s16le -ac 1 -ar 11025 pipe:1 | sporeprint fingerprint`,
 				Flags: []cli.Flag{
 					&cli.IntFlag{
 						Name:    "length",
 						Aliases: []string{"l"},
 						Value:   defaultDuration,
 						Usage:   "max audio length in seconds (0 = unlimited)",
+					},
+					&cli.IntFlag{
+						Name:    "rate",
+						Aliases: []string{"r"},
+						Value:   targetRate,
+						Usage:   "source sample rate in Hz",
+					},
+					&cli.IntFlag{
+						Name:    "channels",
+						Aliases: []string{"c"},
+						Value:   1,
+						Usage:   "source channel count",
+					},
+					&cli.StringFlag{
+						Name:    "format",
+						Aliases: []string{"f"},
+						Value:   "s16le",
+						Usage:   "source sample format: s16le, s32le, f32le",
 					},
 				},
 				Action: runFingerprint,
@@ -136,65 +154,41 @@ func runCompare(_ context.Context, cliCom *cli.Command) error {
 }
 
 func runFingerprint(_ context.Context, cliCom *cli.Command) error {
+	srcRate := cliCom.Int("rate")
+	srcChannels := cliCom.Int("channels")
 	length := cliCom.Int("length")
+
+	format, err := resample.ParseFormat(cliCom.String("format"))
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidArgs, err)
+	}
+
+	if srcRate <= 0 {
+		return fmt.Errorf("%w: rate must be positive", ErrInvalidArgs)
+	}
+
+	if srcChannels <= 0 {
+		return fmt.Errorf("%w: channels must be positive", ErrInvalidArgs)
+	}
 
 	chroma := chromaprint.New()
 	defer chroma.Free()
 
-	if err := chroma.Start(sampleRate, channels); err != nil {
+	if err = chroma.Start(targetRate, 1); err != nil {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}
 
-	// Calculate sample limit: rate × channels × seconds
-	var maxSamples int
-	if length > 0 {
-		maxSamples = sampleRate * channels * length
+	// Create resampler (nil when srcRate == 11025).
+	resampler, err := resample.NewResampler(srcRate)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidArgs, err)
 	}
 
-	buf := make([]byte, bufferSize)
-	samples := make([]int16, bufferSize/2)
-	totalFed := 0
-
-	for {
-		nread, err := io.ReadFull(os.Stdin, buf)
-		if nread == 0 {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-
-			if err != nil {
-				return fmt.Errorf("%w: %w", ErrReadFailure, err)
-			}
-		}
-
-		// Convert bytes to int16 samples
-		numSamples := nread / 2
-		for i := 0; i+1 < nread; i += 2 {
-			//nolint:gosec // samples size = 1/2 buffer size
-			samples[i/2] = int16(binary.LittleEndian.Uint16(buf[i : i+2]))
-		}
-
-		// Apply length limit
-		toFeed := numSamples
-		if maxSamples > 0 && totalFed+toFeed > maxSamples {
-			toFeed = maxSamples - totalFed
-			if toFeed <= 0 {
-				break
-			}
-		}
-
-		if err = chroma.Feed(samples[:toFeed]); err != nil {
-			return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
-		}
-
-		totalFed += toFeed
-
-		if maxSamples > 0 && totalFed >= maxSamples {
-			break
-		}
+	if err = feedPCM(chroma, resampler, format, srcRate, srcChannels, length); err != nil {
+		return err
 	}
 
-	if err := chroma.Finish(); err != nil {
+	if err = chroma.Finish(); err != nil {
 		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
 	}
 
@@ -204,6 +198,121 @@ func runFingerprint(_ context.Context, cliCom *cli.Command) error {
 	}
 
 	_, _ = fmt.Fprintln(os.Stdout, fingerprint)
+
+	return nil
+}
+
+// feedPCM reads raw PCM from stdin, decodes, resamples, and feeds chromaprint.
+func feedPCM(
+	chroma *chromaprint.Context,
+	resampler *resample.Resampler,
+	format resample.Format,
+	srcRate, srcChannels, length int,
+) error {
+	// Length limit in source frames (before resampling).
+	var maxFrames int
+	if length > 0 {
+		maxFrames = srcRate * length
+	}
+
+	buf := make([]byte, bufferSize)
+	totalFrames := 0
+
+	for {
+		mono, done, err := readChunk(buf, format, srcChannels)
+		if err != nil {
+			return err
+		}
+
+		if len(mono) > 0 {
+			// Apply length limit in source frames.
+			mono = limitFrames(mono, maxFrames, totalFrames)
+			totalFrames += len(mono)
+
+			if feedErr := feedChunk(chroma, resampler, mono); feedErr != nil {
+				return feedErr
+			}
+		}
+
+		if done || (maxFrames > 0 && totalFrames >= maxFrames) {
+			break
+		}
+	}
+
+	return flushResampler(chroma, resampler)
+}
+
+// readChunk reads one buffer of raw PCM from stdin and decodes to mono float64.
+// Returns the decoded samples, whether EOF was reached, and any read error.
+func readChunk(buf []byte, format resample.Format, channels int) ([]float64, bool, error) {
+	nread, readErr := io.ReadFull(os.Stdin, buf)
+
+	if nread == 0 {
+		if errors.Is(readErr, io.EOF) {
+			return nil, true, nil
+		}
+
+		if readErr != nil {
+			return nil, false, fmt.Errorf("%w: %w", ErrReadFailure, readErr)
+		}
+	}
+
+	mono := resample.DecodeToFloat64(buf[:nread], format, channels)
+	done := errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF)
+
+	return mono, done, nil
+}
+
+// limitFrames truncates mono to respect the maximum source frame count.
+func limitFrames(mono []float64, maxFrames, totalFrames int) []float64 {
+	if maxFrames <= 0 {
+		return mono
+	}
+
+	remaining := maxFrames - totalFrames
+	if remaining <= 0 {
+		return nil
+	}
+
+	if len(mono) > remaining {
+		return mono[:remaining]
+	}
+
+	return mono
+}
+
+// flushResampler drains remaining samples from the resampler into chromaprint.
+func flushResampler(chroma *chromaprint.Context, resampler *resample.Resampler) error {
+	if resampler == nil {
+		return nil
+	}
+
+	flushed := resampler.Flush()
+	if len(flushed) == 0 {
+		return nil
+	}
+
+	if err := chroma.Feed(flushed); err != nil {
+		return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
+	}
+
+	return nil
+}
+
+// feedChunk resamples a chunk of mono float64 samples and feeds it to chromaprint.
+func feedChunk(chroma *chromaprint.Context, resampler *resample.Resampler, mono []float64) error {
+	var out []int16
+	if resampler != nil {
+		out = resampler.Write(mono)
+	} else {
+		out = resample.FloatToInt16(mono)
+	}
+
+	if len(out) > 0 {
+		if err := chroma.Feed(out); err != nil {
+			return fmt.Errorf("%w: %w", ErrChromaprintFailure, err)
+		}
+	}
 
 	return nil
 }

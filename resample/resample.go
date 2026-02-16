@@ -63,15 +63,20 @@ func Resample(samples []int16, srcRate, srcChannels int) ([]int16, error) {
 	// Downmix to mono float64.
 	mono := downmixToMono(samples, srcChannels)
 
-	// Resample if needed.
-	var resampled []float64
+	// Identity rate: convert directly to int16.
 	if srcRate == targetRate {
-		resampled = mono
-	} else {
-		resampled = resampleLinear(mono, srcRate)
+		return FloatToInt16(mono), nil
 	}
 
-	return floatToInt16(resampled), nil
+	// Resample via streaming Resampler in a single pass.
+	resampler, err := NewResampler(srcRate)
+	if err != nil {
+		return nil, err
+	}
+
+	out := resampler.Write(mono)
+
+	return append(out, resampler.Flush()...), nil
 }
 
 // downmixToMono converts interleaved int16 samples to mono float64.
@@ -104,91 +109,13 @@ func downmixToMono(samples []int16, channels int) []float64 {
 	return out
 }
 
-// resampleLinear implements the polyphase sinc resampler with linear
-// interpolation between adjacent filter phases. This matches swr's
-// resample_linear path.
-func resampleLinear(src []float64, srcRate int) []float64 {
-	// Compute filter parameters.
-	factor := min(float64(targetRate)*cutoff/float64(srcRate), 1)
-
-	filterLength := max(int(math.Ceil(float64(filterSize)/factor)), 1)
-
-	// Ensure even tap count (swr aligns to 2 when filter_length > 1).
-	if filterLength > 1 && filterLength%2 != 0 {
-		filterLength++
-	}
-
-	// Build filter bank.
-	bank := buildFilterBank(factor, filterLength, phaseCount, kaiserBeta)
-
-	// Phase increment computation (matches swr's av_reduce + scaling).
-	// We use rational arithmetic: outRate / (inRate * phaseCount) = dstIncr / srcIncr.
-	srcIncr, dstIncr := reduce(int64(targetRate), int64(srcRate)*int64(phaseCount))
-
-	dstIncrDiv := dstIncr / srcIncr
-	dstIncrMod := dstIncr % srcIncr
-
-	// Initial state: negative index centers the filter delay.
-	index := int64(-phaseCount) * int64((filterLength-1)/2)
-
-	var frac int64
-
-	// Estimate output length.
-	numSrc := int64(len(src))
-	outLen := (numSrc*int64(targetRate) + int64(srcRate) - 1) / int64(srcRate)
-	out := make([]float64, 0, outLen+int64(filterLength))
-
-	for {
-		// Compute source sample index and phase from the combined index.
-		sampleIndex, phase := divMod(index, int64(phaseCount))
-
-		// Check if we've exhausted input.
-		if sampleIndex >= numSrc {
-			break
-		}
-
-		// Convolve with current and next filter phase.
-		filterCur := bank[phase]
-		filterNxt := bank[phase+1]
-
-		var val, valNext float64
-
-		for tap := range filterLength {
-			srcIdx := sampleIndex + int64(tap)
-
-			var sample float64
-			if srcIdx >= 0 && srcIdx < numSrc {
-				sample = src[srcIdx]
-			}
-
-			val += sample * filterCur[tap]
-			valNext += sample * filterNxt[tap]
-		}
-
-		// Linear interpolation between phases.
-		val += (valNext - val) * (float64(frac) / float64(srcIncr))
-		out = append(out, val)
-
-		// Advance phase.
-		frac += dstIncrMod
-		index += dstIncrDiv
-
-		if frac >= srcIncr {
-			frac -= srcIncr
-			index++
-		}
-	}
-
-	return out
-}
-
-// floatToInt16 converts float64 samples to int16 with clamping.
-func floatToInt16(src []float64) []int16 {
+// FloatToInt16 converts float64 samples to int16 with clamping.
+// Uses RoundToEven to match swr's lrintf (banker's rounding).
+func FloatToInt16(src []float64) []int16 {
 	out := make([]int16, len(src))
 
 	for idx, val := range src {
-		// Round to nearest, then clamp.
-		rounded := math.Round(val)
+		rounded := math.RoundToEven(val)
 
 		switch {
 		case rounded > math.MaxInt16:
