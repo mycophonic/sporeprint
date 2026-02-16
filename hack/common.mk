@@ -31,6 +31,7 @@ ORG ?= github.com/mycophonic
 ALLOWED_LICENSES ?= Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT
 LICENSE_IGNORES ?=
 COVER_MIN ?= 0
+TEST_TIMEOUT ?= 10m
 
 # Auto-detect Go module presence.
 ifneq ($(wildcard $(PROJECT_DIR)/go.mod),)
@@ -300,12 +301,12 @@ install-dev-tools: install-dev-gotestsum
 
 test-unit:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/...
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/...
 	$(call footer, $@)
 
 test-unit-bench:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) -count 1 $(PROJECT_DIR)/... -bench=.
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/... -bench=.
 	$(call footer, $@)
 
 # Force external linking for race tests. The race detector injects runtime/cgo
@@ -329,7 +330,7 @@ test-unit-bench:
 #   https://github.com/golang/go/issues/61229 (Apple ld-prime / LC_DYSYMTAB)
 test-unit-race:
 	$(call title, $@)
-	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" $(PROJECT_DIR)/... -race
+	@CGO_ENABLED=1 go test $(VERBOSE_FLAG) -ldflags="-linkmode=external" -timeout $(TEST_TIMEOUT) $(PROJECT_DIR)/... -race
 	$(call footer, $@)
 
 PROF_DIR := $(PROJECT_DIR)/bin/profiles
@@ -371,7 +372,7 @@ COVER_DIR := $(PROJECT_DIR)/bin/coverage
 test-unit-cover: ## Run tests with coverage reporting
 	$(call title, $@)
 	@mkdir -p $(COVER_DIR)
-	@go test $(VERBOSE_FLAG) -count 1 -coverprofile="$(COVER_DIR)/coverage.out" $(PROJECT_DIR)/...
+	@go test $(VERBOSE_FLAG) -count 1 -timeout $(TEST_TIMEOUT) -coverprofile="$(COVER_DIR)/coverage.out" $(PROJECT_DIR)/...
 	@go tool cover -func="$(COVER_DIR)/coverage.out"
 	@go tool cover -html="$(COVER_DIR)/coverage.out" -o "$(COVER_DIR)/coverage.html" \
 		&& echo "HTML report: $(COVER_DIR)/coverage.html"
