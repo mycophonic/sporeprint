@@ -78,7 +78,7 @@ all: clean lint ## Clean and lint everything
 endif
 
 ifeq ($(HAS_GO),true)
-test: unit ## Run all tests
+test: build unit ## Run all tests
 unit: test-unit test-unit-race test-unit-bench test-unit-cover ## Run unit tests
 else
 test: ## Run all tests
@@ -377,7 +377,8 @@ test-unit-cover: ## Run tests with coverage reporting
 		&& echo "HTML report: $(COVER_DIR)/coverage.html"
 	@if [ "$(COVER_MIN)" -gt 0 ] 2>/dev/null; then \
 		total=$$(go tool cover -func="$(COVER_DIR)/coverage.out" | grep ^total | awk '{print $$3}' | tr -d '%'); \
-		if [ "$$(echo "$$total < $(COVER_MIN)" | bc)" -eq 1 ]; then \
+		total_int=$${total%%.*}; \
+		if [ "$$total_int" -lt "$(COVER_MIN)" ]; then \
 			echo "Coverage $${total}% below minimum $(COVER_MIN)%"; exit 1; \
 		fi; \
 		echo "Coverage $${total}% meets minimum $(COVER_MIN)%"; \
