@@ -15,7 +15,7 @@ library for audio fingerprinting. Apache 2.0 licensed.
 - 5 Go packages, ~1,210 lines of production Go code
 - Static linking to libchromaprint.a (157K)
 - Platforms: macOS, Linux, Windows
-- Go 1.25.6, Chromaprint 1.6.0
+- Go 1.25.7, Chromaprint 1.6.0
 
 ## Findings
 

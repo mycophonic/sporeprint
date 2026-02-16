@@ -14,13 +14,14 @@
    limitations under the License.
 */
 
-// Package testutils provides test helpers for sporeprint integration tests.
-package testutils
+// Package testutil provides test helpers for sporeprint integration tests.
+package testutil
 
 import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/containerd/nerdctl/mod/tigron/test"
 	"github.com/containerd/nerdctl/mod/tigron/tig"
@@ -28,13 +29,20 @@ import (
 	"github.com/mycophonic/agar/pkg/agar"
 )
 
-type sporeprintSetup struct {
-	binary string
-}
+// binaryPath is resolved once and shared across all test functions to avoid
+// a data race when tigron calls AmbientRequirements and CustomCommand concurrently.
+//
+//nolint:gochecknoglobals
+var (
+	binaryOnce sync.Once
+	binaryPath string
+)
 
-func (s *sporeprintSetup) CustomCommand(_ *test.Case, _ tig.T) test.CustomizableCommand {
+type sporeprintSetup struct{}
+
+func (*sporeprintSetup) CustomCommand(_ *test.Case, _ tig.T) test.CustomizableCommand {
 	cmd := test.NewGenericCommand()
-	cmd.WithBinary(s.binary)
+	cmd.WithBinary(binaryPath)
 
 	gen := *(cmd.(*test.GenericCommand))
 	gen.WithWhitelist([]string{
@@ -54,20 +62,22 @@ func (s *sporeprintSetup) CustomCommand(_ *test.Case, _ tig.T) test.Customizable
 	return &gen
 }
 
-func (s *sporeprintSetup) AmbientRequirements(_ *test.Case, t tig.T) {
+func (*sporeprintSetup) AmbientRequirements(_ *test.Case, t tig.T) {
 	for _, bin := range []string{"ffmpeg", "fpcalc"} {
 		if _, err := agar.LookFor(bin); err != nil {
 			t.Skip(bin + " not found")
 		}
 	}
 
-	path, err := agar.LookFor("sporeprint")
-	if err != nil {
-		t.Log("sporeprint not found: run 'make build'")
-		t.FailNow()
-	}
+	binaryOnce.Do(func() {
+		path, err := agar.LookFor("sporeprint")
+		if err != nil {
+			t.Log("sporeprint not found: run 'make build'")
+			t.FailNow()
+		}
 
-	s.binary = path
+		binaryPath = path
+	})
 }
 
 // Setup creates a test case configured to run the sporeprint binary.
@@ -162,6 +172,20 @@ func PreprocessPCM(helpers test.Helpers, inputPath, outputPath string) {
 func SporeprintFingerprint(t tig.T, pcmPath string) string {
 	t.Helper()
 
+	return sporeprintFP(t, pcmPath, nil)
+}
+
+// SporeprintFingerprintWithResample feeds a raw PCM file to sporeprint with
+// --rate, --channels, and --format flags, letting sporeprint handle resampling internally.
+func SporeprintFingerprintWithResample(t tig.T, pcmPath, rate, channels, format string) string {
+	t.Helper()
+
+	return sporeprintFP(t, pcmPath, []string{"-r", rate, "-c", channels, "-f", format})
+}
+
+func sporeprintFP(t tig.T, pcmPath string, extraFlags []string) string {
+	t.Helper()
+
 	bin, err := agar.LookFor("sporeprint")
 	if err != nil {
 		t.Log("sporeprint: " + err.Error())
@@ -176,7 +200,10 @@ func SporeprintFingerprint(t tig.T, pcmPath string) string {
 
 	defer f.Close()
 
-	cmd := exec.Command(bin, "fingerprint", "-l", "0")
+	args := []string{"fingerprint", "-l", "0"}
+	args = append(args, extraFlags...)
+
+	cmd := exec.Command(bin, args...)
 	cmd.Stdin = f
 
 	out, err := cmd.Output()
@@ -186,4 +213,24 @@ func SporeprintFingerprint(t tig.T, pcmPath string) string {
 	}
 
 	return strings.TrimSpace(string(out))
+}
+
+// DecodePCM converts an audio file to raw PCM at the given rate/channels/format using ffmpeg.
+// No resampling is applied — ffmpeg only decodes and converts sample format.
+func DecodePCM(helpers test.Helpers, inputPath, outputPath, rate, channels, format string) {
+	helpers.T().Helper()
+
+	ffmpeg, err := agar.LookFor(ffmpegBinary)
+	if err != nil {
+		helpers.T().Log(ffmpegBinary + ": " + err.Error())
+		helpers.T().FailNow()
+	}
+
+	helpers.Custom(ffmpeg,
+		"-i", inputPath,
+		"-f", format,
+		"-ac", channels,
+		"-ar", rate,
+		"-y", outputPath,
+	).Run(&test.Expected{})
 }
