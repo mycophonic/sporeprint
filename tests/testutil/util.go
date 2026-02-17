@@ -18,8 +18,11 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -29,13 +32,16 @@ import (
 	"github.com/mycophonic/agar/pkg/agar"
 )
 
-// binaryPath is resolved once and shared across all test functions to avoid
-// a data race when tigron calls AmbientRequirements and CustomCommand concurrently.
+// binaryPath and fpcalcPath are resolved once and shared across all test
+// functions to avoid a data race when tigron calls AmbientRequirements and
+// CustomCommand concurrently.
 //
 //nolint:gochecknoglobals
 var (
 	binaryOnce sync.Once
 	binaryPath string
+	fpcalcOnce sync.Once
+	fpcalcPath string
 )
 
 type sporeprintSetup struct{}
@@ -62,22 +68,64 @@ func (*sporeprintSetup) CustomCommand(_ *test.Case, _ tig.T) test.CustomizableCo
 	return &gen
 }
 
-func (*sporeprintSetup) AmbientRequirements(_ *test.Case, t tig.T) {
-	for _, bin := range []string{"ffmpeg", "fpcalc"} {
-		if _, err := agar.LookFor(bin); err != nil {
-			t.Skip(bin + " not found")
-		}
+func (*sporeprintSetup) AmbientRequirements(_ *test.Case, tester tig.T) {
+	if _, err := agar.LookFor(ffmpegBinary); err != nil {
+		tester.Skip(ffmpegBinary + " not found")
 	}
+
+	fpcalcOnce.Do(func() {
+		fpcalcPath = findProjectFpcalc()
+		if fpcalcPath == "" {
+			p, err := agar.LookFor(fpcalcBinary)
+			if err != nil {
+				tester.Skip(fpcalcBinary + " not found: run 'make fpcalc'")
+			}
+
+			fpcalcPath = p
+		}
+	})
 
 	binaryOnce.Do(func() {
 		path, err := agar.LookFor("sporeprint")
 		if err != nil {
-			t.Log("sporeprint not found: run 'make build'")
-			t.FailNow()
+			tester.Log("sporeprint not found: run 'make build'")
+			tester.FailNow()
 		}
 
 		binaryPath = path
 	})
+}
+
+// findProjectFpcalc looks for the project-built fpcalc binary at bin/tests/fpcalc
+// relative to the project root (identified by go.mod).
+func findProjectFpcalc() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	name := fpcalcBinary
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			candidate := filepath.Join(dir, "bin", "tests", name)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+
+			return ""
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+
+		dir = parent
+	}
 }
 
 // Setup creates a test case configured to run the sporeprint binary.
@@ -106,43 +154,31 @@ const (
 )
 
 // FpcalcFingerprint runs fpcalc directly on an audio file and returns the fingerprint string.
-func FpcalcFingerprint(t tig.T, filePath string) string {
-	t.Helper()
+func FpcalcFingerprint(tester tig.T, filePath string) string {
+	tester.Helper()
 
-	fpcalc, err := agar.LookFor(fpcalcBinary)
+	out, err := exec.CommandContext(context.Background(), fpcalcPath, "-plain", filePath).Output()
 	if err != nil {
-		t.Log(fpcalcBinary + ": " + err.Error())
-		t.FailNow()
-	}
-
-	out, err := exec.Command(fpcalc, "-plain", filePath).Output()
-	if err != nil {
-		t.Log("fpcalc -plain " + filePath + ": " + err.Error())
-		t.FailNow()
+		tester.Log("fpcalc -plain " + filePath + ": " + err.Error())
+		tester.FailNow()
 	}
 
 	return strings.TrimSpace(string(out))
 }
 
 // FpcalcFingerprintPCM runs fpcalc on a raw s16le 11025Hz mono PCM file and returns the fingerprint.
-func FpcalcFingerprintPCM(t tig.T, pcmPath string) string {
-	t.Helper()
+func FpcalcFingerprintPCM(tester tig.T, pcmPath string) string {
+	tester.Helper()
 
-	fpcalc, err := agar.LookFor(fpcalcBinary)
-	if err != nil {
-		t.Log(fpcalcBinary + ": " + err.Error())
-		t.FailNow()
-	}
-
-	out, err := exec.Command(fpcalc,
+	out, err := exec.CommandContext(context.Background(), fpcalcPath,
 		"-format", PCMFormat,
 		"-rate", PCMSampleRate,
 		"-channels", PCMChannels,
 		"-plain", pcmPath,
 	).Output()
 	if err != nil {
-		t.Log("fpcalc PCM " + pcmPath + ": " + err.Error())
-		t.FailNow()
+		tester.Log("fpcalc PCM " + pcmPath + ": " + err.Error())
+		tester.FailNow()
 	}
 
 	return strings.TrimSpace(string(out))
@@ -183,33 +219,33 @@ func SporeprintFingerprintWithResample(t tig.T, pcmPath, rate, channels, format 
 	return sporeprintFP(t, pcmPath, []string{"-r", rate, "-c", channels, "-f", format})
 }
 
-func sporeprintFP(t tig.T, pcmPath string, extraFlags []string) string {
-	t.Helper()
+func sporeprintFP(tester tig.T, pcmPath string, extraFlags []string) string {
+	tester.Helper()
 
 	bin, err := agar.LookFor("sporeprint")
 	if err != nil {
-		t.Log("sporeprint: " + err.Error())
-		t.FailNow()
+		tester.Log("sporeprint: " + err.Error())
+		tester.FailNow()
 	}
 
-	f, err := os.Open(pcmPath)
+	pcmFile, err := os.Open(pcmPath)
 	if err != nil {
-		t.Log("open PCM: " + err.Error())
-		t.FailNow()
+		tester.Log("open PCM: " + err.Error())
+		tester.FailNow()
 	}
 
-	defer f.Close()
+	defer pcmFile.Close()
 
 	args := []string{"fingerprint", "-l", "0"}
 	args = append(args, extraFlags...)
 
-	cmd := exec.Command(bin, args...)
-	cmd.Stdin = f
+	cmd := exec.CommandContext(context.Background(), bin, args...)
+	cmd.Stdin = pcmFile
 
 	out, err := cmd.Output()
 	if err != nil {
-		t.Log("sporeprint: " + err.Error())
-		t.FailNow()
+		tester.Log("sporeprint: " + err.Error())
+		tester.FailNow()
 	}
 
 	return strings.TrimSpace(string(out))

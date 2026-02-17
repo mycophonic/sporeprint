@@ -157,17 +157,15 @@ linters:
 
   exclusions:
     rules:
+      # gosec is not delivering value on tests, regularly flagging cmd.Exec calls
       - path: testutil/
         linters:
           - gosec
-          - noctx
-          - varnamelen
-          - depguard
       # CGO files produce false positives for these linters
       - path: chromaprint\.go
         linters:
-          - nlreturn
           - gocritic
+          - nlreturn
       - path: _test.go
         linters:
           - varnamelen
@@ -271,9 +269,11 @@ linters:
             - $all
           allow:
             - $gostd
+            - github.com/containerd/nerdctl/mod/tigron
+            - github.com/mycophonic/agar
             - github.com/mycophonic/primordium
-            - github.com/mycophonic/sporeprint
             - github.com/urfave/cli/v3
+            - github.com/mycophonic/sporeprint
 
     staticcheck:
       checks:
