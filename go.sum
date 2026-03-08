@@ -17,8 +17,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mycophonic/agar v0.1.5 h1:ohY3RVPubvJ2+N4JREywktMbx8xqVcyKDD+7yvhhft0=
 github.com/mycophonic/agar v0.1.5/go.mod h1:I7YBbXiuqndV9eakcJboELLBMhks2C2MwHzMEWN8UDs=
-github.com/mycophonic/primordium v0.1.0 h1:y7W3MFkxt5LocIPGESD5w4Ca9VSwmhSelKCS5HMZzRY=
-github.com/mycophonic/primordium v0.1.0/go.mod h1:QMZtK89KAZHgcVjeaB659fhqgTEXQkZDx0ZGcuorIQA=
+github.com/mycophonic/primordium v0.2.0 h1:K2BD0a10jxTxj2do0jtXmWCyq8hwFbizPbpcjdZv6Tg=
+github.com/mycophonic/primordium v0.2.0/go.mod h1:QMZtK89KAZHgcVjeaB659fhqgTEXQkZDx0ZGcuorIQA=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
