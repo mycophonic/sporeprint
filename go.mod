@@ -6,7 +6,7 @@ require (
 	github.com/containerd/nerdctl/mod/tigron v0.0.0-20260212081135-61a62f37ccbf
 	github.com/mycophonic/agar v0.1.5
 	github.com/mycophonic/primordium v0.1.0
-	github.com/urfave/cli/v3 v3.6.2
+	github.com/urfave/cli/v3 v3.7.0
 )
 
 require (
