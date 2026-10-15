@@ -26,6 +26,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/mycophonic/primordium/app"
+	"github.com/mycophonic/primordium/app/shutdown"
 
 	"github.com/mycophonic/sporeprint/chromaprint"
 	"github.com/mycophonic/sporeprint/compare"
@@ -54,8 +55,7 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
-	app.New(ctx, version.Name())
+	ctx := app.New(context.Background(), &app.Options{Name: version.Name(), Version: version.Version()})
 
 	appl := &cli.Command{
 		Name:    version.Name(),
@@ -118,13 +118,20 @@ Examples:
 		},
 	}
 
+	cli.OsExiter = func(code int) { shutdown.Shutdown(); os.Exit(code) }
+
+	code := 0
+
 	if err := appl.Run(ctx, os.Args); err != nil {
 		if !errors.Is(err, ErrNoMatch) {
 			_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		}
 
-		os.Exit(1)
+		code = 1
 	}
+
+	shutdown.Shutdown()
+	os.Exit(code)
 }
 
 func runCompare(_ context.Context, cliCom *cli.Command) error {
