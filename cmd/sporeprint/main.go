@@ -26,6 +26,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/mycophonic/primordium/app"
+	"github.com/mycophonic/primordium/app/shutdown"
 
 	"github.com/mycophonic/sporeprint/chromaprint"
 	"github.com/mycophonic/sporeprint/compare"
@@ -54,9 +55,6 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
-	app.New(ctx, version.Name())
-
 	appl := &cli.Command{
 		Name:    version.Name(),
 		Usage:   "Audio fingerprinting toolkit",
@@ -118,13 +116,24 @@ Examples:
 		},
 	}
 
-	if err := appl.Run(ctx, os.Args); err != nil {
-		if !errors.Is(err, ErrNoMatch) {
-			_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	// urfave/cli exits the process itself for its own errors; shutdown.Exit runs
+	// the handlers first.
+	cli.OsExiter = shutdown.Exit //nolint:reassign // cli.OsExiter is the package's documented hook for the exit
+
+	// app.Main runs the command on a context a shutdown signal cancels, then the
+	// handlers, and exits: 0 on nil, the asked status on an ExitError, which it
+	// does not log; the error is printed here, once.
+	app.Main(&app.Options{Name: version.Name(), Version: version.Version()}, func(ctx context.Context) error {
+		if err := appl.Run(ctx, os.Args); err != nil {
+			if !errors.Is(err, ErrNoMatch) {
+				_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			}
+
+			return shutdown.ExitError(1)
 		}
 
-		os.Exit(1)
-	}
+		return nil
+	})
 }
 
 func runCompare(_ context.Context, cliCom *cli.Command) error {
